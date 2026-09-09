@@ -1,0 +1,34 @@
+# Environment & secrets
+.env
+*.env
+*.env.local
+
+# Database & runtime data
+data/
+*.sqlite3
+*.sqlite3-journal
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

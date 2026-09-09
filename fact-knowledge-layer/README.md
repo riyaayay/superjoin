@@ -79,10 +79,10 @@ PDF upload
 Document + ingestion run (SQLite) ──► raw PDF (local upload directory)
    |
    v
-PyMuPDF text blocks + pdfplumber table cells
+PyMuPDF text blocks + dual table extraction (PyMuPDF find_tables + pdfplumber fallback)
    |                        |
    |                        +── deterministic labelled-cell candidates
-   +── bounded structured LLM prose candidates (Gemini 2.0 Flash)
+   +── bounded structured LLM prose candidates (Gemini 3.5 Flash Lite)
                                   |
                                   v
                        grounding gate against SourceBlock
@@ -103,7 +103,7 @@ PyMuPDF text blocks + pdfplumber table cells
 Every `Fact` row points to a `source_block` with page index, bounding box, and verbatim text. A candidate is accepted **only** when its value literally appears in the source block text. This means the UI can always show "here is where this fact came from" without pretending the LLM is infallible.
 
 #### 2. Deterministic rules + bounded LLM
-Table facts are extracted by deterministic rules (labelled numeric cell with row/column/unit context). Prose facts are extracted by Gemini 2.0 Flash with a per-page cap (20 candidates/page) and per-document cap (500 candidates/document). The LLM is never the source of truth — the source block is.
+Table facts are extracted by deterministic rules (labelled numeric cell with row/column/unit context) using PyMuPDF `find_tables()` (which excels on borderless financial statements) and `pdfplumber` fallback. Prose facts are extracted by Gemini 3.5 Flash Lite with a per-page cap (20 candidates/page) and per-document cap (500 candidates/document). The LLM is never the source of truth — the source block is.
 
 #### 3. Honest uncertainty via the grounding gate
 Rejected candidates are persisted in `candidate_audit` and shown in the UI. This is how the system handles ambiguity: not by eliminating failures but by surfacing them. The demo explicitly shows case #4 — a chart-based value that cannot be extracted, and what would improve it.
@@ -127,9 +127,9 @@ A graph adds a technology dependency without adding correctness. The interesting
 | Decision | Trade-off |
 |----------|-----------|
 | Deterministic blocking over ANN | Cheaper, explainable, but may miss metric pairs with wording differences |
-| PyMuPDF + pdfplumber over Docling | Simpler install, but weaker on complex multi-column layouts |
+| PyMuPDF native tables + pdfplumber | Fast and handles borderless tables, but scanned images require future OCR |
 | FastAPI BackgroundTasks over Celery | One-process simplicity, but blocking for large PDFs |
-| Gemini 2.0 Flash over GPT-4 | Lower cost, good structured output, but slightly more hallucination |
+| Gemini 3.5 Flash Lite over heavy models | High speed, predictable rate limits, but requires strict JSON schema enforcement |
 
 ---
 
@@ -153,8 +153,9 @@ See [docs/demo-cases.md](docs/demo-cases.md) for the four required cases with ev
 
 ## Additional Notes
 
-- **LLM disclosure:** Google Gemini 2.0 Flash is used for prose fact extraction and metric canonicalization. Set `LLM_PROVIDER=fake` to run without any API calls (uses deterministic rules, suitable for testing but lower quality extraction).
+- **LLM disclosure:** Google Gemini 3.5 Flash Lite is used for prose fact extraction and metric canonicalization with a 15 RPM throttling safeguard. Set `LLM_PROVIDER=fake` to run without any API calls (uses deterministic rules, suitable for testing but lower quality extraction).
 - **No credentials committed:** `.env` is gitignored. API keys are never hard-coded.
 - **Extension implemented:** Incremental ingestion (SHA-256 dedup + new-only fact comparison).
 - **Extensions consciously deferred:** Large-PDF streaming, ANN indexing, graph visualisation, dynamic schema evolution — see limitations doc for reasoning.
 - **Sample output:** See `sample-output/` for redacted JSON of facts and relationships from a test run.
+- **Automated tests:** 73/73 passing tests covering unit normalisation, classification, grounding gate, and integration endpoints. Run via `pytest tests/ -v` or `npm run test`.
