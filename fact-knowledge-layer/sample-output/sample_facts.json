@@ -1,0 +1,652 @@
+{
+  "total": 4075,
+  "page": 1,
+  "limit": 20,
+  "items": [
+    {
+      "fact_id": "fact_1f67ac997ef64b",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Profit before tax",
+      "metric_key": "profit before tax",
+      "value_raw": "86.30",
+      "numeric_value": 86.3,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 8.63,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022 (Restated",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {
+        "qualifier": "restated"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "86.3",
+          "input_unit": "in Rs. million million",
+          "output": 8.63,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_7640bdb47e2b44",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "the Company",
+      "metric_raw": "full-time employees",
+      "metric_key": "full-time employees",
+      "value_raw": "1,842",
+      "numeric_value": 1842.0,
+      "value_kind": "numeric",
+      "unit_raw": "employees",
+      "unit_dimension": "unknown",
+      "scale_raw": null,
+      "normalised_value": 1842.0,
+      "normalised_unit": "employees",
+      "period_raw": "As of March 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "consolidation": "standalone"
+      },
+      "extraction_method": "text_llm",
+      "confidence": 0.98,
+      "review_state": "accepted",
+      "normalisation_provenance": [],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_7c44d73780aa46",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "the Group",
+      "metric_raw": "full-time employees",
+      "metric_key": "full-time employees",
+      "value_raw": "2,105",
+      "numeric_value": 2105.0,
+      "value_kind": "numeric",
+      "unit_raw": "employees",
+      "unit_dimension": "unknown",
+      "scale_raw": null,
+      "normalised_value": 2105.0,
+      "normalised_unit": "employees",
+      "period_raw": "As of March 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "consolidation": "consolidated",
+        "includes": [
+          "Solstice Robotics Middle East FZE",
+          "RoboFlow Systems Private Limited"
+        ]
+      },
+      "extraction_method": "text_llm",
+      "confidence": 0.98,
+      "review_state": "accepted",
+      "normalisation_provenance": [],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_192c3778854f4c",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "The Company",
+      "metric_raw": "Scope 1 greenhouse gas emissions",
+      "metric_key": "scope 1 greenhouse gas emissions",
+      "value_raw": "1,240",
+      "numeric_value": 1240.0,
+      "value_kind": "numeric",
+      "unit_raw": "tCO2e",
+      "unit_dimension": "unknown",
+      "scale_raw": null,
+      "normalised_value": 1240.0,
+      "normalised_unit": "tCO2e",
+      "period_raw": "year ended March 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "greenhouse_gas": "Scope 1"
+      },
+      "extraction_method": "text_llm",
+      "confidence": 0.98,
+      "review_state": "accepted",
+      "normalisation_provenance": [],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_81516db6f62145",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "The Company",
+      "metric_raw": "Scope 2 (location-based) emissions",
+      "metric_key": "scope 2 (location-based) emissions",
+      "value_raw": "3,860",
+      "numeric_value": 3860.0,
+      "value_kind": "numeric",
+      "unit_raw": "tCO2e",
+      "unit_dimension": "unknown",
+      "scale_raw": null,
+      "normalised_value": 3860.0,
+      "normalised_unit": "tCO2e",
+      "period_raw": "year ended March 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "greenhouse_gas": "Scope 2 (location-based)"
+      },
+      "extraction_method": "text_llm",
+      "confidence": 0.98,
+      "review_state": "accepted",
+      "normalisation_provenance": [],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_b6527079b86547",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "The Company",
+      "metric_raw": "total electricity consumption",
+      "metric_key": "total electricity consumption",
+      "value_raw": "6.4 million",
+      "numeric_value": null,
+      "value_kind": "text",
+      "unit_raw": "kWh",
+      "unit_dimension": "unknown",
+      "scale_raw": null,
+      "normalised_value": null,
+      "normalised_unit": null,
+      "period_raw": "year ended March 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "consolidation": "across all owned facilities"
+      },
+      "extraction_method": "text_llm",
+      "confidence": 0.98,
+      "review_state": "accepted",
+      "normalisation_provenance": [],
+      "created_at": "2026-09-09T04:56:29.536916+00:00"
+    },
+    {
+      "fact_id": "fact_eb868f42b1694b",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Profit before tax",
+      "metric_key": "profit before tax",
+      "value_raw": "77.25",
+      "numeric_value": 77.25,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 7.7250000000000005,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "77.25",
+          "input_unit": "in Rs. million million",
+          "output": 7.7250000000000005,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.536402+00:00"
+    },
+    {
+      "fact_id": "fact_737bb650ce984c",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Total income",
+      "metric_key": "total income",
+      "value_raw": "3,102.20",
+      "numeric_value": 3102.2,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 310.22,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022 (Restated",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {
+        "qualifier": "restated"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "3102.2",
+          "input_unit": "in Rs. million million",
+          "output": 310.22,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_6f9602ff8e6f46",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Total expenses",
+      "metric_key": "total expenses",
+      "value_raw": "3,986.02",
+      "numeric_value": 3986.02,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 398.60200000000003,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "3986.02",
+          "input_unit": "in Rs. million million",
+          "output": 398.60200000000003,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_5ba3587f02e241",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Total expenses",
+      "metric_key": "total expenses",
+      "value_raw": "4,090.15",
+      "numeric_value": 4090.15,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 409.01500000000004,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023 (Pro forma)",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "qualifier": "pro_forma"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "4090.15",
+          "input_unit": "in Rs. million million",
+          "output": 409.01500000000004,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_78ce1e90991c40",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Total expenses",
+      "metric_key": "total expenses",
+      "value_raw": "2,981.40",
+      "numeric_value": 2981.4,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 298.14000000000004,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "2981.4",
+          "input_unit": "in Rs. million million",
+          "output": 298.14000000000004,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_03ad63c94b1e40",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Total expenses",
+      "metric_key": "total expenses",
+      "value_raw": "3,015.90",
+      "numeric_value": 3015.9,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 301.59000000000003,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022 (Restated",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {
+        "qualifier": "restated"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "3015.9",
+          "input_unit": "in Rs. million million",
+          "output": 301.59000000000003,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_8259b1976fa44e",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Profit before tax",
+      "metric_key": "profit before tax",
+      "value_raw": "345.29",
+      "numeric_value": 345.29,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 34.529,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "345.29",
+          "input_unit": "in Rs. million million",
+          "output": 34.529,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_da4f288769a140",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Profit before tax",
+      "metric_key": "profit before tax",
+      "value_raw": "373.45",
+      "numeric_value": 373.45,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 37.345,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023 (Pro forma)",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "qualifier": "pro_forma"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "373.45",
+          "input_unit": "in Rs. million million",
+          "output": 37.345,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.534922+00:00"
+    },
+    {
+      "fact_id": "fact_93f5e5525c1745",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Revenue from operations",
+      "metric_key": "revenue from operations",
+      "value_raw": "3,014.55",
+      "numeric_value": 3014.55,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 301.45500000000004,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "3014.55",
+          "input_unit": "in Rs. million million",
+          "output": 301.45500000000004,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    },
+    {
+      "fact_id": "fact_c626039f946442",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Revenue from operations",
+      "metric_key": "revenue from operations",
+      "value_raw": "3,058.10",
+      "numeric_value": 3058.1,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 305.81,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022 (Restated",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {
+        "qualifier": "restated"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "3058.1",
+          "input_unit": "in Rs. million million",
+          "output": 305.81,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    },
+    {
+      "fact_id": "fact_4e17c5b34f0842",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Other income",
+      "metric_key": "other income",
+      "value_raw": "62.40",
+      "numeric_value": 62.4,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 6.24,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "62.4",
+          "input_unit": "in Rs. million million",
+          "output": 6.24,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    },
+    {
+      "fact_id": "fact_66e37b0eccd946",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Other income",
+      "metric_key": "other income",
+      "value_raw": "62.40",
+      "numeric_value": 62.4,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 6.24,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2023 (Pro forma)",
+      "period_start": "2023-01",
+      "period_end": "2023-12",
+      "scope": {
+        "qualifier": "pro_forma"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "62.4",
+          "input_unit": "in Rs. million million",
+          "output": 6.24,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    },
+    {
+      "fact_id": "fact_725586e248b64d",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Other income",
+      "metric_key": "other income",
+      "value_raw": "44.10",
+      "numeric_value": 44.1,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 4.41,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {},
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "44.1",
+          "input_unit": "in Rs. million million",
+          "output": 4.41,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    },
+    {
+      "fact_id": "fact_6d44aa0c918a44",
+      "document_id": "doc_ec74400bf4c54827",
+      "entity_raw": "Consolidated Statement of Profit and Loss (Extract)",
+      "metric_raw": "Other income",
+      "metric_key": "other income",
+      "value_raw": "44.10",
+      "numeric_value": 44.1,
+      "value_kind": "numeric",
+      "unit_raw": "in Rs. million",
+      "unit_dimension": "currency",
+      "scale_raw": "million",
+      "normalised_value": 4.41,
+      "normalised_unit": "million",
+      "period_raw": "Year ended Mar 31, 2022 (Restated",
+      "period_start": "2022-01",
+      "period_end": "2022-12",
+      "scope": {
+        "qualifier": "restated"
+      },
+      "extraction_method": "table_rule",
+      "confidence": 0.9,
+      "review_state": "accepted",
+      "normalisation_provenance": [
+        {
+          "operation": "scale_conversion",
+          "input": "44.1",
+          "input_unit": "in Rs. million million",
+          "output": 4.41,
+          "output_unit": "crore-equivalent",
+          "rule_version": "1.0"
+        }
+      ],
+      "created_at": "2026-09-09T04:56:29.532878+00:00"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Fact Knowledge Layer{% endblock %}</title>
+  <meta name="description" content="Evidence-first fact extraction and relationship discovery across PDF documents."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/app.css"/>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand">
+        <span class="brand-icon">⬡</span>
+        <span>FactLayer</span>
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Documents</a>
+        <a href="/#facts" class="nav-link">Facts</a>
+        <a href="/#relationships" class="nav-link">Relationships</a>
+        <a href="/docs" class="nav-link nav-link--api" target="_blank">API Docs</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

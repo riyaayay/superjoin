@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Fact Knowledge Layer — Evidence-First PDF Analysis{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-badge">⬡ Evidence-First · No Hard-Coded Logic · Traceable Facts</div>
+  <h1>Fact Knowledge Layer</h1>
+  <p>Upload PDFs and discover how facts corroborate, contradict, or reconcile across documents — with full source evidence.</p>
+</section>
+
+<!-- Upload Card -->
+<div class="upload-card">
+  <h2>📤 Upload PDF Document</h2>
+  <div class="upload-zone" id="upload-zone">
+    <input type="file" id="file-input" accept=".pdf,application/pdf"/>
+    <div class="upload-icon">📄</div>
+    <p><strong>Click to browse</strong> or drag & drop a PDF</p>
+    <small>Max 50 MB · PDF only · SHA-256 deduplicated</small>
+  </div>
+  <div id="selected-file" class="text-muted mb-16" style="font-size:.82rem"></div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <button class="btn btn-primary" id="upload-btn" disabled>⬆ Upload PDF</button>
+    <div id="upload-status"></div>
+  </div>
+</div>
+
+<!-- Documents Grid -->
+<div class="section-header">
+  <h2><span class="section-icon">📂</span> Documents</h2>
+</div>
+<div class="doc-grid" id="docs-grid">
+  <div class="empty-state"><span class="spinner"></span></div>
+</div>
+
+<!-- Tabbed content: Facts / Relationships / Rejected -->
+<div class="tabs">
+  <button class="tab active" data-tab="facts-panel">📊 Facts</button>
+  <button class="tab" data-tab="rels-panel">🔗 Relationships</button>
+  <button class="tab" data-tab="rejected-panel">⚠ Rejected Candidates</button>
+</div>
+
+<!-- Facts panel -->
+<div id="facts-panel" class="tab-panel">
+  <div class="filters-bar">
+    <input class="filter-input" id="entity-filter" placeholder="Filter by entity…"/>
+    <input class="filter-input" id="metric-filter" placeholder="Filter by metric…"/>
+    <select class="filter-select" id="state-filter">
+      <option value="">All states</option>
+      <option value="accepted">Accepted</option>
+      <option value="needs_review">Needs review</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <span class="text-muted" style="font-size:.8rem">Total: <strong id="facts-total">—</strong></span>
+  </div>
+  <div class="facts-table-wrap">
+    <table class="facts-table">
+      <thead>
+        <tr>
+          <th>Entity</th>
+          <th>Metric</th>
+          <th>Value (raw)</th>
+          <th>Period</th>
+          <th>Unit</th>
+          <th>State</th>
+          <th>Doc</th>
+        </tr>
+      </thead>
+      <tbody id="facts-tbody">
+        <tr><td colspan="7" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Relationships panel -->
+<div id="rels-panel" class="tab-panel hidden">
+  <div class="filters-bar">
+    <select class="filter-select" id="verdict-filter">
+      <option value="">All verdicts</option>
+      <option value="corroborates">Corroborates</option>
+      <option value="reconciles">Reconciles</option>
+      <option value="likely_conflict">Likely Conflict</option>
+      <option value="insufficient_context">Insufficient Context</option>
+    </select>
+  </div>
+  <div class="rel-grid" id="rels-grid">
+    <div style="padding:40px;text-align:center"><span class="spinner"></span></div>
+  </div>
+</div>
+
+<!-- Rejected candidates panel -->
+<div id="rejected-panel" class="tab-panel hidden">
+  <p class="text-muted mb-16" style="font-size:.82rem">
+    🔍 Demo Case #4: Extraction and reasoning failures are surfaced here — never silently dropped.
+  </p>
+  <div class="facts-table-wrap">
+    <table class="facts-table">
+      <thead>
+        <tr>
+          <th>Entity</th>
+          <th>Metric</th>
+          <th>Value</th>
+          <th>Rejection Reason</th>
+          <th>Method</th>
+        </tr>
+      </thead>
+      <tbody id="rejected-tbody">
+        <tr><td colspan="5" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

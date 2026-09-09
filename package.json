@@ -1,0 +1,13 @@
+{
+  "name": "superjoin-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Superjoin fact knowledge layer workspace",
+  "scripts": {
+    "dev": "npm --prefix fact-knowledge-layer run dev",
+    "start": "npm --prefix fact-knowledge-layer run start",
+    "test": "npm --prefix fact-knowledge-layer run test",
+    "seed": "npm --prefix fact-knowledge-layer run seed",
+    "audit": "npm --prefix fact-knowledge-layer run audit"
+  }
+}

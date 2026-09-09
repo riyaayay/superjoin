@@ -1,0 +1,102 @@
+[
+  {
+    "id": "aud_9c9fcf56cac2",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 1: R&D Expenditure, Innovation, GDP Per Capita and Total Factor Productivity",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_d58446e5773f",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Table 1: Impact of R&D Expenditure Growth on TFP Growth in India",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_b9f4386c7e63",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 1: Persistence in CPI Food and its Components",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_0c8efe119d87",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 2: Shift in Real Expenditures of Households",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_4e2771a4b5db",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Table 1: Change in Expenditure Shares and Persistence",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_adf34a5ea373",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Table 4).\u00a0 RM growth witnessed a transient",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_c473741ac9c2",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 1: CD Issuances (Fortnightly)",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_dc904ce53fe2",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 2: CD Rates - Primary and Secondary Market",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_01c701ecad08",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Table 1: GARCH (1,1) Estimation Results",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  },
+  {
+    "id": "aud_6e46ecdb38bc",
+    "document_id": "doc_c86450769dfd4f78",
+    "entity_raw": "Chart / Graphic Figure",
+    "metric_raw": "Chart 1: India\u2019s Outward FDI Trend",
+    "value_raw": "[visual_data_unextractable]",
+    "rejection_reason": "source_block_is_chart_or_image",
+    "extraction_method": "visual_inspection",
+    "created_at": "2026-09-08T23:18:04.432734+00:00"
+  }
+]

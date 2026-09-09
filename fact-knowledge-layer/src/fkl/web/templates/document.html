@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Document — Fact Knowledge Layer{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-12 mb-24">
+  <a href="/" class="btn btn-ghost btn-sm">← Back</a>
+  <h1 style="font-size:1.3rem;font-weight:700">Document Detail</h1>
+  <span id="doc-status"><span class="spinner"></span></span>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-num stat-num--blue" id="doc-pages">—</div>
+    <div class="stat-label">Pages</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--green" id="facts-accepted-count">—</div>
+    <div class="stat-label">Accepted Facts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--amber" id="facts-rejected-count">—</div>
+    <div class="stat-label">Rejected Candidates</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--blue" id="rels-count">—</div>
+    <div class="stat-label">Relationships</div>
+  </div>
+</div>
+
+<div id="doc-error"></div>
+
+<div class="card mb-24">
+  <div class="card-title mb-16">⚙ Ingestion Runs</div>
+  <div id="runs-list"><span class="spinner"></span></div>
+</div>
+
+<div class="section-header">
+  <h2><span class="section-icon">📊</span> Facts from this document</h2>
+</div>
+<div class="facts-table-wrap">
+  <table class="facts-table">
+    <thead>
+      <tr>
+        <th>Entity</th><th>Metric</th><th>Value</th><th>Period</th><th>State</th><th>Method</th>
+      </tr>
+    </thead>
+    <tbody id="doc-facts-tbody">
+      <tr><td colspan="6" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Pass document ID to JS
+  window.__DOC_ID__ = "{{ document_id }}";
+  document.addEventListener('DOMContentLoaded', () => {
+    // Patch stat cards using doc API response
+    const origInit = window.initDocumentPage;
+    initDocumentPage(window.__DOC_ID__);
+    // Wire stats
+    const origLoad = API.document;
+    API.document(window.__DOC_ID__).then(doc => {
+      const s = doc.stats || {};
+      const el = (id) => document.getElementById(id);
+      if (el('facts-accepted-count')) el('facts-accepted-count').textContent = s.facts_accepted ?? '—';
+      if (el('facts-rejected-count')) el('facts-rejected-count').textContent = s.facts_rejected_candidates ?? '—';
+      if (el('rels-count')) el('rels-count').textContent = s.relationships ?? '—';
+      if (el('doc-pages')) el('doc-pages').textContent = doc.page_count ?? '—';
+    });
+  });
+</script>
+{% endblock %}

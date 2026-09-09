@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Fact Detail — Fact Knowledge Layer{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-12 mb-24">
+  <a href="/" class="btn btn-ghost btn-sm">← Back</a>
+  <h1 style="font-size:1.2rem;font-weight:700">Fact Detail</h1>
+  <code class="mono text-muted" style="font-size:.72rem">{{ fact_id }}</code>
+</div>
+
+<div id="fact-container">
+  <div style="text-align:center;padding:60px">
+    <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+    <p class="text-muted mt-16">Loading fact and relationships…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.__FACT_ID__ = "{{ fact_id }}";
+  document.addEventListener('DOMContentLoaded', () => initFactPage(window.__FACT_ID__));
+</script>
+{% endblock %}
