@@ -25,6 +25,8 @@ In high-stakes financial and macro analysis, an opaque LLM extraction engine is 
 
 ---
 
+> 📖 **Complete Architecture & Pipeline Deep Dive:** See [ARCHITECTURE_AND_PIPELINE.md](ARCHITECTURE_AND_PIPELINE.md) for detailed function specifications, prompt engineering schemas, rate-limiting algorithms, and precision tolerance formulas.
+
 ## 🏛️ System Architecture
 
 ```mermaid
