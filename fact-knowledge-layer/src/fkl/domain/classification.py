@@ -98,7 +98,9 @@ def _try_convert(left: Fact, right: Fact) -> tuple[float | None, float | None, f
 # ---------------------------------------------------------------------------
 
 METRIC_THRESHOLD = 0.35
-METRIC_GRAY_LOW = 0.10
+# Set to 0.0: the LLM gray-zone path must fire for zero-overlap synonym pairs
+# (e.g. "Revenue" vs "Turnover"). A floor > 0 silently excludes them.
+METRIC_GRAY_LOW = 0.0
 ENTITY_THRESHOLD = 0.25
 
 

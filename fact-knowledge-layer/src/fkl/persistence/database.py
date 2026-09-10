@@ -23,6 +23,20 @@ def init_db(database_url: str) -> None:
     if database_url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
     _engine = create_engine(database_url, connect_args=connect_args)
+
+    # Task C: Enable WAL journal mode and busy timeout for SQLite concurrency.
+    # WAL allows concurrent readers while a write is in progress, and busy_timeout
+    # lets waiting writers retry for up to 5 000 ms before raising OperationalError.
+    if database_url.startswith("sqlite"):
+        from sqlalchemy import event
+
+        @event.listens_for(_engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn, _connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
+
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     Base.metadata.create_all(bind=_engine)
     _run_migrations(_engine)

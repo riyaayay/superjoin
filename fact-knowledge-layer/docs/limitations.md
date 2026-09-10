@@ -2,10 +2,10 @@
 
 ## Known Limitations
 
-### 1. No OCR for Charts and Images
-PyMuPDF extracts text blocks but cannot read values plotted inside bar charts, line graphs, or pie charts.
-The system records these blocks with `block_kind = chart | image` so the non-extraction is **visible** rather than silent.
-**Next step:** Integrate pytesseract or a vision-capable LLM call for image blocks.
+### 1. Chart / Image Extraction Quality
+PyMuPDF cannot render pixel data from plotted bar/line charts. The system now routes `chart` and `image` blocks through `GeminiProvider.extract_from_image()`, which extracts facts from the block's caption/alt-text using the LLM.
+
+**Residual limitation:** Facts from image blocks are capped at `confidence_hint ≤ 0.45` and always land in `ReviewState.NEEDS_REVIEW`. The LLM reads the caption text — not the actual pixel chart — so extracted values require human verification before being trusted.
 
 ### 2. Heuristic Table Parser
 pdfplumber's table detection works well on clearly-bordered financial tables but struggles with:
@@ -25,8 +25,10 @@ Gemini 2.0 Flash is good at structured extraction from clean prose, but may:
 The blocking key uses Jaccard overlap of word tokens. Two metrics like "GDP at market prices" and "Gross Domestic Product (market)" may not share enough tokens to be blocked together. The LLM canonicalization call helps but is not used for all pairs (only those that pass deterministic blocking).
 **Next step:** Add phrase embeddings (e.g., sentence-transformers) as a second blocking pass for pairs missed by token overlap.
 
-### 5. No Production Queue
-The API uses FastAPI `BackgroundTasks` for simplicity. For large PDFs or high concurrency, this blocks the server. A persistent queue (Celery + Redis, or Temporal) is the next step for production.
+### 5. SQLite Concurrency
+SQLite is now configured with `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000`. WAL allows concurrent readers while a write transaction is in progress. Simultaneous ingestion runs (multiple documents at once) can still serialize writes; heavy concurrent write loads should use PostgreSQL.
+**Residual:** SQLite allows only one writer at a time regardless of WAL; simultaneous ingestion of many documents may still experience brief lock contention.
+
 
 ### 6. No Authentication
 The review endpoint (`POST /api/relationships/{id}/review`) has no authentication. Fine for a local demo, not for deployment.

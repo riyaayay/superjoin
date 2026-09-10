@@ -66,6 +66,27 @@ Return ONLY a JSON array. If no clear facts, return [].
 Each fact must have: entity_raw, metric_raw, value_raw, evidence_quote.
 Optional: unit_raw, period_raw, scope (dict), confidence_hint (0-1)."""
 
+_IMAGE_EXTRACT_SYSTEM = """You are a precise fact extractor for financial charts and graphical figures.
+
+Rules:
+1. Only extract facts that can be read directly from the chart/figure description or caption.
+2. Do not invent values — if you cannot read a specific number, do not extract it.
+3. Return [] if no numeric or semantic fact is reliably readable.
+4. Set confidence_hint low (0.2–0.45) — visual extractions require human verification.
+5. entity_raw: the company/subject the chart depicts.
+6. metric_raw: the metric name shown in the chart title or axis label.
+7. value_raw: the specific data value (e.g. '42%', '₹1,234 crore').
+8. evidence_quote: repeat the caption text or axis label that supports the value."""
+
+_IMAGE_EXTRACT_USER = """Extract facts from this chart or figure.
+
+DOCUMENT CONTEXT: {context}
+CHART CAPTION / ALT TEXT: {caption}
+
+Return ONLY a JSON array. Each fact: entity_raw, metric_raw, value_raw, evidence_quote.
+Optional: unit_raw, period_raw, scope, confidence_hint (keep ≤ 0.45).
+Return [] if no specific numeric fact is clearly readable."""
+
 
 def _parse_retry_delay(error_str: str) -> float:
     """Extract retry delay seconds from a 429 error message, default 15s."""
@@ -182,6 +203,64 @@ class GeminiProvider:
             return candidates
         except Exception as e:
             logger.error("Gemini extract_facts error: %s", e)
+            return []
+
+    def extract_from_image(
+        self,
+        *,
+        block: SourceBlock,
+        document_context: str,
+        canonical_entity: str | None = None,
+    ) -> list[FactCandidate]:
+        """Extract facts from a chart or image block using caption/alt-text.
+
+        Visual extractions are low-confidence by design (≤ 0.45) so they always
+        land in ReviewState.NEEDS_REVIEW and never auto-promote to ACCEPTED.
+        Returns [] if the block has no readable caption text.
+        """
+        caption = block.text.strip()
+        if not caption:
+            logger.debug("Image block %s has no caption — skipping vision extraction", block.id)
+            return []
+
+        prompt = _IMAGE_EXTRACT_USER.format(
+            context=document_context or "General Document",
+            caption=caption[:500],  # cap to avoid oversized prompts
+        )
+
+        # Use a vision-friendly model call (same model, text-only prompt from caption)
+        try:
+            raw = self._generate_with_retry(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    temperature=0.0,
+                    max_output_tokens=512,
+                ),
+            )
+            raw = re.sub(r"^```(?:json)?\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+            data = json.loads(raw)
+            if not isinstance(data, list):
+                return []
+            fallback_entity = canonical_entity or "Entity"
+            candidates = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                if not item.get("entity_raw"):
+                    item["entity_raw"] = fallback_entity
+                if not item.get("metric_raw") or not item.get("value_raw"):
+                    continue
+                # Cap confidence: visual extractions must go to NEEDS_REVIEW
+                item["confidence_hint"] = min(float(item.get("confidence_hint", 0.3)), 0.45)
+                try:
+                    candidates.append(FactCandidate(**item))
+                except (ValidationError, TypeError) as e:
+                    logger.warning("Image candidate validation failed: %s | item: %s", e, item)
+            return candidates
+        except Exception as e:
+            logger.warning("Gemini extract_from_image error (block %s): %s", block.id, e)
             return []
 
     def canonicalise_metric(self, *, left: Fact, right: Fact) -> dict:

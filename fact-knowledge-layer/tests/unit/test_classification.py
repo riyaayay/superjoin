@@ -268,7 +268,7 @@ class TestMatchMethodAndMetricScore:
         right = _fact(metric="Total turnover sales revenue", normalised_value=500.0, document_id="doc_b")
         provider = TestSemanticMetricMatching.StubMetricProvider(same=True, similarity=0.85, canonical_label="Total Revenue")
         cmp = classify(left, right, metric_provider=provider)
-        assert 0.10 <= cmp.metric_score < 0.35
+        assert 0.0 <= cmp.metric_score < 0.35
         assert cmp.match_method == "llm_fallback"
         assert cmp.metric_match is True
 

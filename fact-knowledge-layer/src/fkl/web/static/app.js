@@ -144,53 +144,70 @@ function initIndexPage() {
   const factsSection = document.getElementById('facts-section');
   const relsSection = document.getElementById('rels-section');
 
-  let currentFile = null;
+  let currentFiles = [];  // multi-file: array of File objects
   let activePolls = new Set();
 
-  // Drag & drop
+  // Drag & drop (support multiple files)
   uploadZone?.addEventListener('click', () => fileInput?.click());
   uploadZone?.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
   uploadZone?.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
   uploadZone?.addEventListener('drop', e => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    const f = e.dataTransfer.files[0];
-    if (f) handleFileSelect(f);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
+    if (files.length) handleFilesSelect(files);
   });
-  fileInput?.addEventListener('change', () => { if (fileInput.files[0]) handleFileSelect(fileInput.files[0]); });
+  fileInput?.addEventListener('change', () => {
+    if (fileInput.files.length) handleFilesSelect(Array.from(fileInput.files));
+  });
 
-  function handleFileSelect(f) {
-    currentFile = f;
+  function handleFilesSelect(files) {
+    currentFiles = files;
     if (selectedFile) {
-      selectedFile.textContent = `Selected: ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
+      selectedFile.textContent = files.length === 1
+        ? `Selected: ${files[0].name} (${(files[0].size / 1024 / 1024).toFixed(2)} MB)`
+        : `Selected: ${files.length} files (${files.map(f => f.name).join(', ')})`;
     }
     if (uploadBtn) uploadBtn.disabled = false;
   }
 
   uploadBtn?.addEventListener('click', async () => {
-    if (!currentFile) return;
+    if (!currentFiles.length) return;
     uploadBtn.disabled = true;
     uploadBtn.innerHTML = '<span class="spinner"></span> Uploading…';
     if (uploadStatus) uploadStatus.innerHTML = '';
-    try {
-      const fd = new FormData();
-      fd.append('file', currentFile);
-      const res = await API.uploadDocument(fd);
-      if (res.deduplicated) {
-        toast(`Document already uploaded (${res.document_id}) — returning existing.`, 'info');
-      } else {
-        toast('Upload successful! Processing started.', 'success');
+
+    const results = [];
+    for (const file of currentFiles) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await API.uploadDocument(fd);
+        if (res.deduplicated) {
+          toast(`${file.name}: already uploaded — returning existing.`, 'info');
+        } else {
+          toast(`${file.name}: upload successful! Processing started.`, 'success');
+        }
+        results.push(res);
+        startPollingDoc(res.document_id);
+      } catch (e) {
+        toast(`${file.name}: ${e.message}`, 'error');
+        if (uploadStatus) uploadStatus.innerHTML += `<span class="text-red">${esc(file.name)}: ${esc(e.message)}</span><br>`;
       }
-      if (uploadStatus) uploadStatus.innerHTML = `<span class="badge badge-${res.status}">${res.status}</span> <span class="text-muted mono" style="font-size:.75rem">${res.document_id}</span>`;
-      startPollingDoc(res.document_id);
-      loadDocuments();
-    } catch (e) {
-      toast(e.message, 'error');
-      if (uploadStatus) uploadStatus.innerHTML = `<span class="text-red">${esc(e.message)}</span>`;
-    } finally {
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = '⬆ Upload PDF';
     }
+
+    if (results.length) {
+      if (uploadStatus) uploadStatus.innerHTML = results
+        .map(r => `<span class="badge badge-${r.status}">${r.status}</span> <span class="text-muted mono" style="font-size:.75rem">${r.document_id}</span>`)
+        .join('<br>');
+      loadDocuments();
+    }
+
+    currentFiles = [];
+    if (selectedFile) selectedFile.textContent = '';
+    if (fileInput) fileInput.value = '';
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '⬆ Upload PDF';
   });
 
   function startPollingDoc(docId) {

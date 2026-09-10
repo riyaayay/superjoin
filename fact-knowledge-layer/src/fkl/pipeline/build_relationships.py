@@ -7,6 +7,7 @@ accepted facts from other documents. Old-old pairs are never recomputed.
 from __future__ import annotations
 
 import logging
+from typing import Any
 import uuid
 from datetime import datetime, timezone
 
@@ -62,7 +63,8 @@ def _orm_to_fact(row: FactORM) -> Fact:
 
 _STOP_WORDS = frozenset({"the", "a", "an", "of", "in", "at", "by", "for", "to", "from", "and", "or", "on", "as", "is"})
 ENTITY_BLOCKING_THRESHOLD = 0.25
-METRIC_BLOCKING_THRESHOLD = 0.10  # Aligned with METRIC_GRAY_LOW for semantic matching
+# Metric blocking is intentionally disabled: zero-overlap synonyms (Revenue vs Turnover)
+# must reach classify() so the LLM gray-zone path can fire. Only entity overlap is gated.
 
 
 def _tokenize(text: str) -> frozenset[str]:
@@ -88,25 +90,21 @@ def _passes_blocking(
     left: tuple[frozenset[str], frozenset[str]] | Fact | FactORM,
     right: tuple[frozenset[str], frozenset[str]] | Fact | FactORM,
 ) -> bool:
-    """A pair passes blocking only if entity AND metric thresholds are both met."""
-    l_ent, l_met = left if isinstance(left, tuple) else _blocking_keys(left)
-    r_ent, r_met = right if isinstance(right, tuple) else _blocking_keys(right)
+    """A pair passes blocking if entity overlap meets threshold.
+
+    Metric blocking is intentionally absent: synonym pairs like 'Revenue' vs 'Turnover'
+    have zero Jaccard overlap but are semantically equivalent. The LLM gray-zone path
+    inside classify() handles this disambiguation — but only if the pair passes blocking
+    first. Gating on metric Jaccard would suppress exactly the pairs that need LLM help.
+    """
+    l_ent, _l_met = left if isinstance(left, tuple) else _blocking_keys(left)
+    r_ent, _r_met = right if isinstance(right, tuple) else _blocking_keys(right)
 
     ent_union = l_ent | r_ent
     if not ent_union:
         return False
     ent_jaccard = len(l_ent & r_ent) / len(ent_union)
-    if ent_jaccard < ENTITY_BLOCKING_THRESHOLD:
-        return False
-
-    met_union = l_met | r_met
-    if not met_union:
-        return False
-    met_jaccard = len(l_met & r_met) / len(met_union)
-    if met_jaccard < METRIC_BLOCKING_THRESHOLD:
-        return False
-
-    return True
+    return ent_jaccard >= ENTITY_BLOCKING_THRESHOLD
 
 
 class _CallCappedProvider:

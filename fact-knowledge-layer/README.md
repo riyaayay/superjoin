@@ -138,10 +138,10 @@ A graph adds a technology dependency without adding correctness. The interesting
 See [docs/limitations.md](docs/limitations.md) for a full list.
 
 **Most consequential next improvements:**
-1. OCR/vision for chart and image blocks
+1. OCR/pixel rendering for chart/image blocks (currently extracts from caption/alt-text only)
 2. Better table header recovery for multi-level headers
-3. Phrase embedding as a second blocking pass
-4. Production queue for large PDFs
+3. Phrase embedding as a second blocking pass for zero-token-overlap synonyms not caught by LLM cap
+4. Production queue for large PDFs (Celery + Redis)
 
 ---
 
@@ -153,9 +153,14 @@ See [docs/demo-cases.md](docs/demo-cases.md) for the four required cases with ev
 
 ## Additional Notes
 
-- **LLM disclosure:** Google Gemini 3.5 Flash Lite is used for prose fact extraction and metric canonicalization with a 15 RPM throttling safeguard. Set `LLM_PROVIDER=fake` to run without any API calls (uses deterministic rules, suitable for testing but lower quality extraction).
+- **LLM disclosure:** Google Gemini 3.5 Flash Lite is used for prose fact extraction, chart/image caption extraction, and metric canonicalization with a 15 RPM throttling safeguard. Set `LLM_PROVIDER=fake` to run without any API calls (uses deterministic rules, suitable for testing but lower quality extraction).
 - **No credentials committed:** `.env` is gitignored. API keys are never hard-coded.
-- **Extension implemented:** Incremental ingestion (SHA-256 dedup + new-only fact comparison).
+- **Extension implemented — Incremental ingestion:** SHA-256 dedup prevents re-processing identical files. `build_relationships()` only compares new facts × existing facts from other documents — old-old pairs are never recomputed. `GET /api/facts?document_id={id}` returns facts per-document; cross-document relationships are always computed incrementally.
+- **Extension implemented — Multi-document knowledge layer:** All ingested documents share a single fact store. Cross-document corroboration, reconciliation, and conflict detection happen automatically across every document pair. `GET /api/relationships` returns the full cross-document relationship graph.
+- **Extension implemented — Multi-file upload:** The upload UI accepts multiple PDF files in a single selection (drag-and-drop or file picker). Files are uploaded and processed sequentially; each gets its own ingestion run and independent polling.
+- **Extension implemented — Fault-isolated ingestion:** If relationship building (Stage 5) fails, the document lands in `relationships_failed` status rather than `failed`. Facts are still persisted and accessible via API. The failure message is surfaced in the run metadata and the UI badge.
+- **Extension implemented — Coverage transparency:** Every `GET /api/documents/{id}` run entry includes `prose_blocks_total`, `prose_blocks_llm_called`, `table_cells_total/rejected_*`, and `relationship_pairs_total/jaccard_matched/llm_fallback_matched/insufficient_context` so generalization quality is readable per document.
 - **Extensions consciously deferred:** Large-PDF streaming, ANN indexing, graph visualisation, dynamic schema evolution — see limitations doc for reasoning.
 - **Sample output:** See `sample-output/` for redacted JSON of facts and relationships from a test run.
-- **Automated tests:** 73/73 passing tests covering unit normalisation, classification, grounding gate, and integration endpoints. Run via `pytest tests/ -v` or `npm run test`.
+- **Automated tests:** 112/112 passing tests covering unit normalisation, classification, grounding gate, blocking gate, and integration endpoints. Run via `pytest tests/ -v` or `npm run test`.
+- **Compliance audit:** See [docs/compliance_audit.md](docs/compliance_audit.md) for a full audit of all 9 required tasks + supplementary fixes against the assignment brief.

@@ -131,10 +131,16 @@ class TestFix2TwoDimensionalBlocking:
         f2 = _sample_fact(entity="Reliance Industries Ltd", metric="Revenue from Operations")
         assert _passes_blocking(f1, f2) is True
 
-    def test_entity_overlap_but_metric_mismatch_fails_blocking(self):
+    def test_entity_overlap_passes_even_with_different_metric(self):
+        """Task A: metric mismatch alone does NOT block — entity overlap is the sole gate.
+        Synonym pairs like 'Net Revenue from Operations' vs 'Employee Benefit Expenses'
+        pass blocking so that classify() can handle disambiguation via the LLM gray zone.
+        """
         f1 = _sample_fact(entity="Reliance Industries", metric="Net Revenue from Operations")
         f2 = _sample_fact(entity="Reliance Industries", metric="Employee Benefit Expenses")
-        assert _passes_blocking(f1, f2) is False
+        # Same entity — passes blocking. classify() will then return INSUFFICIENT_CONTEXT
+        # because these metrics are genuinely different (caught by is_conflicting_metric).
+        assert _passes_blocking(f1, f2) is True
 
     def test_metric_overlap_but_entity_mismatch_fails_blocking(self):
         f1 = _sample_fact(entity="Reliance Industries", metric="Revenue from Operations")
@@ -542,3 +548,77 @@ class TestFix8MetricGroundingAndRoleStatus:
         assert merged.period_raw == "effective June 30, 2022"
         assert merged.scope.get("role_status") == "resigned"
         assert merged.qualifiers.get("role_status") == "resigned"
+
+
+class TestTaskABlockingGate:
+    """Task A: Zero-overlap synonym pairs must pass _passes_blocking() and reach classify()."""
+
+    def _fact_pair(self, metric_left="Revenue", metric_right="Turnover", entity="Reliance Industries"):
+        left = _sample_fact(entity=entity, metric=metric_left, id="fa1", doc_id="doc_a")
+        right = _sample_fact(entity=entity, metric=metric_right, id="fa2", doc_id="doc_b")
+        return left, right
+
+    def test_zero_overlap_metric_synonyms_pass_blocking(self):
+        """Revenue vs Turnover: 0 metric Jaccard, but same entity → must pass blocking."""
+        from fkl.pipeline.build_relationships import _passes_blocking, _blocking_keys
+        left, right = self._fact_pair("Revenue", "Turnover")
+        assert _passes_blocking(_blocking_keys(left), _blocking_keys(right)), (
+            "Synonym pair with zero metric Jaccard was blocked — Task A fix not applied"
+        )
+
+    def test_unrelated_entity_still_blocked(self):
+        """Pairs from completely different entities must still be blocked."""
+        from fkl.pipeline.build_relationships import _passes_blocking, _blocking_keys
+        left = _sample_fact(entity="Reliance Industries Limited", metric="Revenue", id="fx1", doc_id="doc_a")
+        right = _sample_fact(entity="Completely Unrelated Corp XYZ Different", metric="Revenue", id="fx2", doc_id="doc_b")
+        # Even with same metric, entity overlap is too low
+        assert not _passes_blocking(_blocking_keys(left), _blocking_keys(right)), (
+            "Unrelated entity pair should not pass blocking"
+        )
+
+    def test_gray_zone_fires_for_zero_jaccard_pair(self):
+        """With METRIC_GRAY_LOW=0.0, classify() must call the LLM path for 0-overlap synonyms."""
+        from fkl.domain.classification import classify, METRIC_GRAY_LOW
+
+        class RecordingProvider:
+            def __init__(self):
+                self.calls = 0
+
+            def canonicalise_metric(self, left, right):
+                self.calls += 1
+                return {"same": True, "canonical": "Revenue", "canonical_label": "Revenue", "similarity": 1.0}
+
+        assert METRIC_GRAY_LOW == 0.0, "METRIC_GRAY_LOW must be 0.0 for Task A fix"
+
+        left, right = self._fact_pair("Revenue", "Turnover")
+        provider = RecordingProvider()
+        cmp = classify(left, right, metric_provider=provider)
+        assert provider.calls == 1, (
+            f"LLM not called for zero-overlap synonym pair (calls={provider.calls}). "
+            "METRIC_GRAY_LOW may be > 0 or the classify gray-zone path is broken."
+        )
+        assert cmp.match_method == "llm_fallback"
+        assert cmp.metric_match is True
+
+    def test_call_capped_provider_enforces_limit(self):
+        """_CallCappedProvider must stop issuing LLM calls once cap is reached."""
+        from fkl.pipeline.build_relationships import _CallCappedProvider
+
+        call_count = [0]
+
+        class RealProvider:
+            def canonicalise_metric(self, left, right):
+                call_count[0] += 1
+                return {"same": True, "canonical": "X", "canonical_label": "X", "similarity": 1.0}
+
+        capped = _CallCappedProvider(RealProvider(), max_calls=3)
+        dummy_left = _sample_fact(metric="Revenue", id="g1", doc_id="doc_a")
+        dummy_right = _sample_fact(metric="Turnover", id="g2", doc_id="doc_b")
+
+        for _ in range(6):
+            capped.canonicalise_metric(left=dummy_left, right=dummy_right)
+
+        assert call_count[0] == 3, (
+            f"Expected 3 LLM calls (cap), got {call_count[0]}"
+        )
+        assert capped.calls == 3

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fkl.config import get_settings
 from fkl.domain.enums import BlockKind, ExtractionMethod, ReviewState, UnitDimension, ValueKind
-from fkl.domain.models import Fact, IngestionSummary, NormalisationStep
+from fkl.domain.models import Fact, FactCandidate, IngestionSummary, NormalisationStep, SourceBlock
 from fkl.domain.normalisation import detect_fy_end_month, detect_scale, normalise_value, parse_numeric, parse_period
 from fkl.persistence import database, repositories
 from fkl.pipeline.build_relationships import build_relationships
@@ -218,18 +218,31 @@ def ingest_document(document_id: str) -> IngestionSummary:
         )
         blocks_skipped_due_to_cap = text_stats.prose_blocks_skipped_due_to_cap
 
-        # Collect chart/figure blocks as candidates to explicitly audit visual non-extraction (Demo Case #4)
+        # Route chart/figure blocks to vision extraction if provider supports it (Task B)
         chart_candidates: list[tuple[FactCandidate, SourceBlock, ExtractionMethod]] = []
         for b in blocks:
             if b.block_kind in (BlockKind.CHART, BlockKind.IMAGE):
-                c = FactCandidate(
-                    entity_raw="Chart / Graphic",
-                    metric_raw=b.text.strip()[:80] or "Visual Figure",
-                    value_raw="[visual_data]",
-                    evidence_quote=b.text.strip()[:100] or "[image block]",
-                    confidence_hint=0.0,
-                )
-                chart_candidates.append((c, b, ExtractionMethod.TEXT_LLM))
+                if hasattr(provider, "extract_from_image"):
+                    try:
+                        page_heading = next(
+                            (blk.text[:200] for blk in blocks
+                             if blk.block_kind == BlockKind.HEADING and blk.pdf_page_index == b.pdf_page_index),
+                            "Chart / Figure",
+                        )
+                        visual_candidates = provider.extract_from_image(
+                            block=b,
+                            document_context=page_heading,
+                            canonical_entity=canonical_entity,
+                        )
+                        for vc in visual_candidates:
+                            chart_candidates.append((vc, b, ExtractionMethod.TEXT_LLM))
+                        if not visual_candidates:
+                            logger.debug("[%s] No facts extracted from visual block %s", document_id, b.id)
+                    except Exception as ve:
+                        logger.warning("[%s] Vision extraction failed for block %s: %s", document_id, b.id, ve)
+                else:
+                    # Provider doesn't support vision: audit block as visual_only rejection
+                    logger.debug("[%s] Provider has no extract_from_image — skipping chart block %s", document_id, b.id)
 
         all_candidates = (
             [(c, b, ExtractionMethod.TABLE_RULE) for c, b in table_candidates]
