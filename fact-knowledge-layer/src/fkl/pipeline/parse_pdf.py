@@ -34,6 +34,41 @@ def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
 
 
+def _balance_parens(s: str) -> str:
+    """Ensure any string ending with unbalanced open parentheses gets balanced."""
+    if not s:
+        return s
+    diff = s.count("(") - s.count(")")
+    return s + (")" * diff) if diff > 0 else s
+
+
+def _block_overlaps_table(
+    bbox_raw: tuple[float, float, float, float] | list[float] | None,
+    table_bboxes: list[tuple[float, float, float, float]],
+) -> bool:
+    """Return True if block significantly overlaps or is inside any table bounding box."""
+    if not bbox_raw or not table_bboxes:
+        return False
+    bx0, by0, bx1, by1 = bbox_raw
+    b_area = max(0.0, bx1 - bx0) * max(0.0, by1 - by0)
+    if b_area <= 0:
+        return False
+
+    for tx0, ty0, tx1, ty1 in table_bboxes:
+        ix0 = max(bx0, tx0)
+        iy0 = max(by0, ty0)
+        ix1 = min(bx1, tx1)
+        iy1 = min(by1, ty1)
+
+        if ix1 > ix0 and iy1 > iy0:
+            inter_area = (ix1 - ix0) * (iy1 - iy0)
+            cx = (bx0 + bx1) / 2.0
+            cy = (by0 + by1) / 2.0
+            if (inter_area / b_area >= 0.4) or (tx0 <= cx <= tx1 and ty0 <= cy <= ty1):
+                return True
+    return False
+
+
 def _detect_printed_label(page_text_blocks: list[dict]) -> str | None:
     """Attempt to identify a printed page label from footer/header blocks."""
     for block in page_text_blocks:
@@ -43,12 +78,66 @@ def _detect_printed_label(page_text_blocks: list[dict]) -> str | None:
     return None
 
 
-def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int, list[str]]:
+def resolve_canonical_entity(mupdf_doc: fitz.Document) -> str | None:
+    """
+    Resolve a single canonical entity name for the document once during ingestion.
+    Prioritises corporate/institutional indicators, followed by topmost/largest headings on page 1.
+    """
+    if len(mupdf_doc) == 0:
+        return None
+
+    # Check author metadata if it represents an organization/institution
+    author = (mupdf_doc.metadata.get("author") or "").strip()
+    if author and author.lower() not in ("", "(anonymous)", "unknown", "admin", "unspecified") and not author.endswith(".pdf"):
+        if any(w in author.lower() for w in ["imf", "bank", "ministry", "limited", "ltd", "corp", "corporation", "fund", "government", "reserve bank"]):
+            return author
+
+    ignore_re = re.compile(
+        r"^(contents|table of contents|preface|acknowledgement|abbreviations|chapter|part\s+\w+|volume|index|page(\s+no\.?)?|\d+|[ivxlcdm]+$)",
+        re.I,
+    )
+    toc_dots_re = re.compile(r"\.{4,}")
+    corp_re = re.compile(
+        r"\b(limited|ltd|corporation|corp|inc|bank|ministry|department|fund|council|board|trust|government|reserve bank)\b",
+        re.I,
+    )
+
+    candidates: list[tuple[float, str]] = []
+    for page_idx in range(min(3, len(mupdf_doc))):
+        page = mupdf_doc[page_idx]
+        d = page.get_text("dict")
+        for b in d.get("blocks", []):
+            if "lines" in b:
+                for l in b["lines"]:
+                    spans = [s for s in l["spans"] if s.get("text", "").strip()]
+                    if not spans:
+                        continue
+                    line_text = " ".join(s["text"].strip() for s in spans)
+                    line_clean = line_text.strip()
+                    if not line_clean or len(line_clean) < 3 or len(line_clean) > 100:
+                        continue
+                    if ignore_re.search(line_clean) or toc_dots_re.search(line_clean):
+                        continue
+
+                    max_sz = max(s.get("size", 10.0) for s in spans)
+                    y0 = l["bbox"][1]
+                    is_corp = bool(corp_re.search(line_clean))
+                    score = (100 if is_corp else 0) + max_sz + (20 if page_idx == 0 else 0) - (y0 * 0.01)
+                    candidates.append((score, line_clean))
+
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
+    return author or None
+
+
+def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int, list[str], str | None]:
     """
     Parse a PDF into SourceBlock records.
 
     Returns:
-        (blocks, page_count, warnings)
+        (blocks, page_count, warnings, canonical_entity)
 
     One bad page yields a warning; remaining pages continue.
     """
@@ -61,6 +150,9 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
         raise RuntimeError(f"Cannot open PDF: {e}") from e
 
     page_count = len(mupdf_doc)
+    canonical_entity = resolve_canonical_entity(mupdf_doc)
+    if not canonical_entity:
+        warnings.append("entity resolution failed for this document — facts may have inconsistent entity attribution")
 
     try:
         plumber_doc = pdfplumber.open(str(pdf_path))
@@ -83,6 +175,46 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
 
         printed_label = _detect_printed_label(page_dict_blocks)
 
+        # 1. Identify tables and table bboxes first
+        table_blocks: list[SourceBlock] = []
+        table_bboxes: list[tuple[float, float, float, float]] = []
+
+        mupdf_tables = _extract_mupdf_tables(
+            document_id, pdf_page_index, printed_label, mupdf_page, page_dict_blocks
+        )
+        if mupdf_tables:
+            table_blocks = mupdf_tables
+            try:
+                tabs = mupdf_page.find_tables()
+                for tab in tabs.tables:
+                    table_bboxes.append(tuple(tab.bbox))
+            except Exception:
+                pass
+        elif plumber_doc:
+            try:
+                plumber_page = plumber_doc.pages[page_idx]
+                table_blocks = _extract_table_blocks(
+                    document_id, pdf_page_index, printed_label, plumber_page
+                )
+                try:
+                    ptabs = plumber_page.find_tables()
+                    for ptab in ptabs:
+                        table_bboxes.append(tuple(ptab.bbox))
+                except Exception:
+                    pass
+            except Exception as e:
+                warnings.append(f"Page {pdf_page_index}: pdfplumber table error — {e}")
+
+        # Fallback to cell bboxes if find_tables didn't collect bboxes
+        if not table_bboxes and table_blocks:
+            for tb in table_blocks:
+                if tb.bbox:
+                    bb = tb.bbox
+                    btup = (bb.x0, bb.y0, bb.x1, bb.y1)
+                    if btup not in table_bboxes:
+                        table_bboxes.append(btup)
+
+        # 2. Extract non-table blocks, filtering out blocks that overlap detected tables
         for b_info in page_dict_blocks:
             text = b_info["text"]
             block_type = b_info.get("type", 0)
@@ -112,6 +244,10 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
             if len(text.strip()) < _MIN_BLOCK_LEN:
                 continue
 
+            # Filter out text blocks that fall inside a detected table bounding box
+            if _block_overlaps_table(bbox_raw, table_bboxes):
+                continue
+
             bbox = BoundingBox(x0=bbox_raw[0], y0=bbox_raw[1], x1=bbox_raw[2], y1=bbox_raw[3]) if bbox_raw else None
 
             # Detect approximate block kind from size/position heuristics
@@ -132,21 +268,9 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
                 )
             )
 
-        # Table extraction: try PyMuPDF native find_tables first, fallback to pdfplumber
-        mupdf_tables = _extract_mupdf_tables(
-            document_id, pdf_page_index, printed_label, mupdf_page, page_dict_blocks
-        )
-        if mupdf_tables:
-            blocks.extend(mupdf_tables)
-        elif plumber_doc:
-            try:
-                plumber_page = plumber_doc.pages[page_idx]
-                table_blocks = _extract_table_blocks(
-                    document_id, pdf_page_index, printed_label, plumber_page
-                )
-                blocks.extend(table_blocks)
-            except Exception as e:
-                warnings.append(f"Page {pdf_page_index}: pdfplumber table error — {e}")
+        # 3. Add table blocks (TABLE_CELL)
+        if table_blocks:
+            blocks.extend(table_blocks)
 
     if plumber_doc:
         try:
@@ -155,7 +279,7 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
             pass
     mupdf_doc.close()
 
-    return blocks, page_count, warnings
+    return blocks, page_count, warnings, canonical_entity
 
 
 def _classify_block_kind(text: str, bbox: BoundingBox | None, page_height: float) -> BlockKind:
@@ -221,9 +345,7 @@ def _extract_mupdf_tables(
                 else:
                     unit_note = txt.split(".")[0].strip()
 
-        title = table_title or company_title
-
-        # Check for clean header block near the top of the table
+        # Keep table title and company title genuinely separate (Fix 1)
         col_headers = None
         for b in page_dict_blocks:
             bbox = b.get("bbox", [0, 0, 0, 0])
@@ -235,6 +357,9 @@ def _extract_mupdf_tables(
 
         if not col_headers:
             col_headers = [str(h).strip() if h else "" for h in (rows[0] or [])]
+
+        # Ensure parenthetical qualifiers in column headers are balanced (Fix 6)
+        col_headers = [_balance_parens(h) for h in col_headers]
 
         # Extract data rows
         for row in rows[1:]:
@@ -258,7 +383,8 @@ def _extract_mupdf_tables(
                     continue
 
                 table_ctx = TableContext(
-                    table_title=title,
+                    table_title=table_title,
+                    company_name=company_title,
                     row_header=row_header,
                     column_headers=[col_header] if col_header else [],
                     cell_value=cell_text,

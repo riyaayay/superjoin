@@ -95,25 +95,36 @@ class TestNormaliseValue:
 
 
 class TestParsePeriod:
-    def test_fy_short(self):
-        p = parse_period("FY24")
+    def test_fy_short_with_context(self):
+        p = parse_period("FY24", doc_context="The company's fiscal year ending March 31, 2024.")
         assert p["start"] == "2023-04"
         assert p["end"] == "2024-03"
 
-    def test_fy_full(self):
-        p = parse_period("FY 2024-25")
+    def test_fy_full_with_context(self):
+        p = parse_period("FY 2024-25", doc_context="financial year ends 31 March.")
         assert p["start"] == "2024-04"
         assert p["end"] == "2025-03"
 
-    def test_q4_fy24(self):
-        p = parse_period("Q4 FY24")
+    def test_q4_fy24_with_context(self):
+        p = parse_period("Q4 FY24", doc_context="year ended 31.03.2024")
         assert p["start"] == "2024-01"
         assert p["end"] == "2024-03"
 
-    def test_q1_fy25(self):
-        p = parse_period("Q1 FY25")
+    def test_q1_fy25_with_context(self):
+        p = parse_period("Q1 FY25", doc_context="fiscal year ending March 31")
         assert p["start"] == "2024-04"
         assert p["end"] == "2024-06"
+
+    def test_fy_without_context_returns_unknown(self):
+        p = parse_period("FY24")
+        assert p["start"] is None
+        assert p["end"] is None
+        assert p.get("period_convention") == "unknown"
+
+    def test_fy_december_end(self):
+        p = parse_period("FY24", doc_context="Company fiscal year ending December 31.")
+        assert p["start"] == "2024-01"
+        assert p["end"] == "2024-12"
 
     def test_calendar_year(self):
         p = parse_period("2024")
@@ -124,3 +135,23 @@ class TestParsePeriod:
         p = parse_period("no period here")
         assert p["start"] is None
         assert p["end"] is None
+
+    def test_year_ended_period(self):
+        p = parse_period("Year ended 31.03.2023 (Audited)")
+        assert p["start"] == "2022-04"
+        assert p["end"] == "2023-03"
+
+    def test_parenthesised_token_preserved(self):
+        """Header strings ending with a parenthesised token (e.g. '(Audited)', '(Rs. in Lakhs)') must retain closing paren."""
+        from fkl.pipeline.parse_pdf import _balance_parens
+        from fkl.pipeline.extract_table_facts import _balance_parens as tbl_balance
+
+        raw_audited = "Year ended 31.03.2023 (Audited)"
+        truncated_audited = "Year ended 31.03.2023 (Audited"
+        assert _balance_parens(raw_audited) == "Year ended 31.03.2023 (Audited)"
+        assert _balance_parens(truncated_audited) == "Year ended 31.03.2023 (Audited)"
+        assert tbl_balance(truncated_audited) == "Year ended 31.03.2023 (Audited)"
+
+        truncated_unit = "Stand-alone Financial Results (Rs. in Lakhs"
+        assert _balance_parens(truncated_unit) == "Stand-alone Financial Results (Rs. in Lakhs)"
+        assert tbl_balance(truncated_unit) == "Stand-alone Financial Results (Rs. in Lakhs)"

@@ -54,12 +54,20 @@ def detect_scale(text: str) -> str:
 
 
 def parse_numeric(raw: str) -> float | None:
-    """Parse a numeric string, handling commas, parentheses, and % suffixes."""
-    s = raw.strip()
-    negative = s.startswith("(") and s.endswith(")")
-    s = s.lstrip("(").rstrip(")")
+    """Parse a numeric string, handling commas, parentheses, currencies, unicode minus, and suffixes."""
+    s = raw.strip().replace("\u2212", "-")
+    negative = (s.startswith("(") and s.endswith(")")) or s.startswith("-")
+    s = s.lstrip("(").rstrip(")").lstrip("-").strip()
     s = s.rstrip("%").strip()
-    s = s.replace(",", "").replace("₹", "").replace("$", "").strip()
+    for sym in ("₹", "$", "€", "£", "¥"):
+        s = s.replace(sym, "")
+    s = s.strip()
+    s_lower = s.lower()
+    for suf in ("bps", "bp", "x"):
+        if s_lower.endswith(suf):
+            s = s[: -len(suf)].strip()
+            break
+    s = s.replace(",", "").strip()
     try:
         val = float(Decimal(s))
         return -val if negative else val
@@ -88,6 +96,7 @@ def normalise_value(
     value_raw: str,
     unit_raw: str | None,
     scale_raw: str | None = None,
+    doc_context: str | None = None,
 ) -> NormalisationProvenance:
     """Normalise a raw value with transparent provenance."""
     steps: list[NormalisationStep] = []
@@ -133,7 +142,7 @@ def normalise_value(
         normalised_unit = scale or (unit_raw or "")
 
     # Period parsing
-    period_prov = parse_period(unit_raw or "")
+    period_prov = parse_period(unit_raw or "", doc_context=doc_context)
 
     return NormalisationProvenance(
         steps=steps,
@@ -151,31 +160,112 @@ def normalise_value(
 _FY_FULL = re.compile(r"FY\s*(\d{2,4})-(\d{2,4})", re.I)
 _FY_SHORT = re.compile(r"FY\s*(\d{2,4})", re.I)
 _QFY = re.compile(r"Q([1-4])\s*FY\s*(\d{2,4})", re.I)
+_YEAR_ENDED = re.compile(r"year\s+ended\s+(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})", re.I)
+_QUARTER_ENDED = re.compile(r"(?:quarter|3\s*months?)\s+ended\s+(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})", re.I)
+_DATE_DMY = re.compile(r"\b(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})\b")
 _CAL_YEAR = re.compile(r"\b(20\d{2})\b")
 
+_MONTH_NAMES = {
+    "january": 1, "jan": 1,
+    "february": 2, "feb": 2,
+    "march": 3, "mar": 3,
+    "april": 4, "apr": 4,
+    "may": 5,
+    "june": 6, "jun": 6,
+    "july": 7, "jul": 7,
+    "august": 8, "aug": 8,
+    "september": 9, "sep": 9, "sept": 9,
+    "october": 10, "oct": 10,
+    "november": 11, "nov": 11,
+    "december": 12, "dec": 12,
+}
 
-def parse_period(text: str) -> dict[str, str | None]:
-    """Extract period start/end from raw period text."""
-    m = _QFY.search(text)
+_FY_END_RE = re.compile(
+    r"(?:fiscal\s+year|financial\s+year|year)\s+(?:ends|ended|ending)\s+(?:on\s+)?([a-z0-9\.\/-]+(?:\s+[a-z0-9]+)?)",
+    re.IGNORECASE,
+)
+_DATE_DD_MM = re.compile(r"(\d{1,2})[\.\/-](\d{1,2})")
+
+
+def detect_fy_end_month(text: str | None) -> int | None:
+    """Find explicit fiscal year end month from text (e.g. 'fiscal year ending March 31')."""
+    if not text:
+        return None
+    m = _FY_END_RE.search(text)
+    if not m:
+        return None
+    matched_phrase = m.group(1).lower()
+    for name, month_num in _MONTH_NAMES.items():
+        if name in matched_phrase:
+            return month_num
+    dm = _DATE_DD_MM.search(matched_phrase)
+    if dm:
+        return int(dm.group(2))
+    return None
+
+
+def parse_period(text: str, *, doc_context: str | None = None) -> dict[str, str | None]:
+    """Extract period start/end from raw period text, using doc_context for ambiguous FY conventions."""
+    # Year ended DD.MM.YYYY
+    m = _YEAR_ENDED.search(text)
     if m:
-        q, fy_short = int(m.group(1)), int(m.group(2))
-        fy = 2000 + fy_short if fy_short < 100 else fy_short
-        q_starts = {1: f"{fy-1}-04", 2: f"{fy-1}-07", 3: f"{fy-1}-10", 4: f"{fy}-01"}
-        q_ends = {1: f"{fy-1}-06", 2: f"{fy-1}-09", 3: f"{fy-1}-12", 4: f"{fy}-03"}
-        return {"start": q_starts[q], "end": q_ends[q]}
+        month, year = int(m.group(2)), int(m.group(3))
+        if month == 3:
+            return {"start": f"{year-1}-04", "end": f"{year}-03"}
+        elif month == 12:
+            return {"start": f"{year}-01", "end": f"{year}-12"}
+        else:
+            start_y = year if month == 12 else year - 1
+            start_m = (month % 12) + 1
+            return {"start": f"{start_y}-{start_m:02d}", "end": f"{year}-{month:02d}"}
 
-    m = _FY_FULL.search(text)
+    # Quarter / 3 months ended DD.MM.YYYY
+    m = _QUARTER_ENDED.search(text)
     if m:
-        start_y = int(m.group(1)) if int(m.group(1)) > 100 else 2000 + int(m.group(1))
-        end_y = int(m.group(2)) if int(m.group(2)) > 100 else 2000 + int(m.group(2))
-        return {"start": f"{start_y}-04", "end": f"{end_y}-03"}
+        month, year = int(m.group(2)), int(m.group(3))
+        q_start_month = max(1, month - 2)
+        return {"start": f"{year}-{q_start_month:02d}", "end": f"{year}-{month:02d}"}
 
-    m = _FY_SHORT.search(text)
+    # Ambiguous fiscal year strings: Q[1-4] FY..., FY YYYY-YY, FY YY
+    is_qfy = _QFY.search(text)
+    is_fy_full = _FY_FULL.search(text)
+    is_fy_short = _FY_SHORT.search(text)
+
+    if is_qfy or is_fy_full or is_fy_short:
+        fy_end_m = detect_fy_end_month(doc_context) or detect_fy_end_month(text)
+        if fy_end_m is None:
+            return {"start": None, "end": None, "period_convention": "unknown"}
+
+        start_m = (fy_end_m % 12) + 1
+
+        if is_qfy:
+            q, fy_short = int(is_qfy.group(1)), int(is_qfy.group(2))
+            fy = 2000 + fy_short if fy_short < 100 else fy_short
+            offset = (q - 1) * 3
+            q_start_m = (start_m - 1 + offset) % 12 + 1
+            q_end_m = (q_start_m + 2 - 1) % 12 + 1
+            y_start = fy if (fy_end_m == 12 or q_start_m < start_m) else fy - 1
+            y_end = fy if (fy_end_m == 12 or (q_end_m <= fy_end_m and q_end_m >= q_start_m)) else fy - 1
+            return {"start": f"{y_start}-{q_start_m:02d}", "end": f"{y_end}-{q_end_m:02d}"}
+
+        if is_fy_full:
+            start_y = int(is_fy_full.group(1)) if int(is_fy_full.group(1)) > 100 else 2000 + int(is_fy_full.group(1))
+            end_y = int(is_fy_full.group(2)) if int(is_fy_full.group(2)) > 100 else 2000 + int(is_fy_full.group(2))
+            return {"start": f"{start_y}-{start_m:02d}", "end": f"{end_y}-{fy_end_m:02d}"}
+
+        if is_fy_short:
+            fy = int(is_fy_short.group(1))
+            fy = 2000 + fy if fy < 100 else fy
+            start_y = fy if fy_end_m == 12 else fy - 1
+            return {"start": f"{start_y}-{start_m:02d}", "end": f"{fy}-{fy_end_m:02d}"}
+
+    # Explicit DMY date
+    m = _DATE_DMY.search(text)
     if m:
-        fy = int(m.group(1))
-        fy = 2000 + fy if fy < 100 else fy
-        return {"start": f"{fy-1}-04", "end": f"{fy}-03"}
+        month, year = int(m.group(2)), int(m.group(3))
+        return {"start": f"{year}-{month:02d}", "end": f"{year}-{month:02d}"}
 
+    # Calendar year
     m = _CAL_YEAR.search(text)
     if m:
         y = int(m.group(1))

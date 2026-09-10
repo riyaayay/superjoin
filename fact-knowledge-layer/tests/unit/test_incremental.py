@@ -73,6 +73,7 @@ class TestIncrementalRelationshipBuilding:
 
         existing_rows = [to_orm(existing_a), to_orm(existing_b)]
         rels = build_relationships([new_c], existing_rows, "run_new")
+        assert len(rels) == 2, "Both doc_a and doc_b pairs must survive blocking and form relationships"
 
         # All relationships must involve the new fact
         for r in rels:

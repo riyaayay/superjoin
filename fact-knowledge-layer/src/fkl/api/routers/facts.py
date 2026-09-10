@@ -15,10 +15,12 @@ router = APIRouter(prefix="/api/facts", tags=["facts"])
 
 def _format_fact(f, block=None) -> dict:
     prov = json.loads(f.normalisation_provenance_json or "[]")
+    scope = json.loads(f.scope_json or "{}")
     result = {
         "fact_id": f.id,
         "document_id": f.document_id,
         "entity_raw": f.entity_raw,
+        "entity_canonical": f.entity_canonical,
         "metric_raw": f.metric_raw,
         "metric_key": f.metric_key,
         "value_raw": f.value_raw,
@@ -32,7 +34,8 @@ def _format_fact(f, block=None) -> dict:
         "period_raw": f.period_raw,
         "period_start": f.period_start,
         "period_end": f.period_end,
-        "scope": json.loads(f.scope_json or "{}"),
+        "role_status": scope.get("role_status"),
+        "scope": scope,
         "extraction_method": f.extraction_method,
         "confidence": f.confidence,
         "review_state": f.review_state,

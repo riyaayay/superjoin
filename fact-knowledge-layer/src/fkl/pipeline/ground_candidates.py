@@ -44,6 +44,81 @@ def _value_in_text(value_raw: str, text_normalised: str) -> bool:
     return False
 
 
+_STOP_WORDS = frozenset([
+    "a", "an", "the", "and", "or", "of", "in", "for", "on", "at", "to", "by",
+    "with", "from", "as", "is", "was", "are", "were", "be", "been", "being",
+    "it", "its", "that", "this", "these", "those",
+])
+
+_TAXONOMY_DESCRIPTORS = frozenset(["position", "role", "status", "date"])
+
+_CANONICAL_CATEGORIES = frozenset([
+    "Board Position", "Board Resignation", "Board Appointment",
+    "Executive Position", "Executive Appointment", "Executive Resignation",
+])
+_CANONICAL_CATEGORIES_LOWER = frozenset(c.lower() for c in _CANONICAL_CATEGORIES)
+
+_ROOT_SUFFIXES = ("ation", "ition", "ement", "ment", "sion", "tion", "ion", "ing", "ies", "es", "ed", "s")
+
+
+def get_canonical_roots(word: str) -> set[str]:
+    """Extract canonical morphological roots using deterministic longest-suffix-first stripping."""
+    w = word.lower()
+    roots = {w}
+    for suffix in _ROOT_SUFFIXES:
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            base = w[:-len(suffix)]
+            roots.add(base)
+            if suffix in ("ation", "ition", "ed") and not base.endswith("e"):
+                roots.add(base + "e")
+            if suffix == "ies":
+                roots.add(base + "y")
+    return roots
+
+
+def words_match(w1: str, w2: str) -> bool:
+    """Exact match or canonical root intersection."""
+    r1 = get_canonical_roots(w1)
+    r2 = get_canonical_roots(w2)
+    return bool(r1 & r2)
+
+
+def _metric_in_text(metric_raw: str, search_text: str) -> bool:
+    """Check that metric_raw is semantically grounded in search_text (R1-R4)."""
+    raw = metric_raw.strip()
+    if not raw:
+        return False
+
+    # R4: Category-prefix handling with closed-set validation
+    if ":" in raw:
+        category, _, label = raw.partition(":")
+        if category.strip().lower() not in _CANONICAL_CATEGORIES_LOWER:
+            return False
+        phrase = label.strip()
+    else:
+        phrase = raw
+
+    m_tokens = re.findall(r"\b[a-z0-9]+\b", phrase.lower())
+    if not m_tokens:
+        return False
+
+    search_tokens = set(re.findall(r"\b[a-z0-9]+\b", search_text.lower()))
+
+    # R2: Three-tier classification — filter stop words and taxonomy descriptors unconditionally
+    content_words = [w for w in m_tokens if w not in _STOP_WORDS and w not in _TAXONOMY_DESCRIPTORS]
+
+    # If zero content words remain, reject immediately (no vacuous pass)
+    if not content_words:
+        return False
+
+    # R3: 100% of content words must match via exact match or canonical root
+    for cw in content_words:
+        if not any(words_match(cw, st) for st in search_tokens):
+            return False
+
+    return True
+
+
 def ground(
     candidate: FactCandidate,
     block: SourceBlock,
@@ -55,6 +130,7 @@ def ground(
     2. Required fields (entity, metric, value) must be non-empty.
     3. Image/chart blocks cannot ground numeric facts.
     4. Table-cell candidates validate value against cell_value, not substring.
+    5. Prose block metric labels must be grounded in the block text or evidence quote.
     """
     # Chart/image blocks cannot produce grounded numeric facts
     if block.block_kind in (BlockKind.CHART, BlockKind.IMAGE):
@@ -95,6 +171,19 @@ def ground(
                 accepted=False,
                 rejection_reason="table_cell_value_mismatch",
             )
+
+        if candidate.scope.get("plausible_year_value") and candidate.confidence_hint < 0.3:
+            return GroundingResult(
+                accepted=False,
+                rejection_reason="plausible_year_value_low_confidence",
+            )
+
+        if candidate.scope.get("unrecognized_numeric"):
+            return GroundingResult(
+                accepted=False,
+                rejection_reason="cell_value_not_recognized_as_numeric",
+            )
+
         confidence = _score(candidate, block, table_match=True)
         return GroundingResult(
             accepted=True,
@@ -107,6 +196,14 @@ def ground(
         return GroundingResult(
             accepted=False,
             rejection_reason="value_not_found_in_block_text",
+        )
+
+    # Prose block: metric label must be grounded in block text or evidence quote
+    search_context = f"{block.text_normalised} {normalise_text(candidate.evidence_quote or '')}"
+    if not _metric_in_text(candidate.metric_raw, search_context):
+        return GroundingResult(
+            accepted=False,
+            rejection_reason="metric_label_not_grounded",
         )
 
     # Optional: check evidence_quote

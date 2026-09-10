@@ -125,3 +125,90 @@ class TestGrounding:
         )
         result = ground(cand, block)
         assert result.accepted is True
+
+    def test_low_confidence_fact_needs_review(self):
+        """Candidates with confidence < 0.65 must receive review_state == 'needs_review'."""
+        from fkl.application.ingest_document import _make_fact
+        from fkl.domain.enums import ExtractionMethod, ReviewState
+        from fkl.pipeline.ground_candidates import GroundingResult
+
+        cand = _make_candidate(confidence_hint=0.55)
+        grounding = GroundingResult(
+            accepted=True,
+            evidence_block_id="blk_123",
+            confidence=0.55,
+        )
+        fact = _make_fact(cand, grounding, "run_1", "doc_1", ExtractionMethod.TEXT_LLM)
+        assert fact.review_state == ReviewState.NEEDS_REVIEW
+        assert fact.review_state.value == "needs_review"
+
+    def test_high_confidence_fact_accepted(self):
+        """Candidates with confidence >= 0.65 must receive review_state == 'accepted'."""
+        from fkl.application.ingest_document import _make_fact
+        from fkl.domain.enums import ExtractionMethod, ReviewState
+        from fkl.pipeline.ground_candidates import GroundingResult
+
+        cand = _make_candidate(confidence_hint=0.85)
+        grounding = GroundingResult(
+            accepted=True,
+            evidence_block_id="blk_123",
+            confidence=0.85,
+        )
+        fact = _make_fact(cand, grounding, "run_1", "doc_1", ExtractionMethod.TEXT_LLM)
+        assert fact.review_state == ReviewState.ACCEPTED
+        assert fact.review_state.value == "accepted"
+
+
+class TestPlausibleYearGrounding:
+    def test_plausible_year_low_confidence_rejected(self):
+        ctx = TableContext(
+            row_header="Employee count",
+            cell_value="2025",
+            column_headers=["FY24"],
+        )
+        block = SourceBlock(
+            id="blk_year_1",
+            document_id="doc_1",
+            pdf_page_index=1,
+            block_kind=BlockKind.TABLE_CELL,
+            text="2025",
+            text_normalised="2025",
+            table_context=ctx,
+            content_hash="h_year_1",
+        )
+        cand = FactCandidate(
+            entity_raw="Solstice Robotics",
+            metric_raw="Employee count",
+            value_raw="2025",
+            scope={"plausible_year_value": True},
+            confidence_hint=0.15,
+        )
+        res = ground(cand, block)
+        assert res.accepted is False
+        assert res.rejection_reason == "plausible_year_value_low_confidence"
+
+    def test_plausible_year_high_confidence_accepted(self):
+        ctx = TableContext(
+            row_header="Employee count",
+            cell_value="2025",
+            column_headers=["Headcount"],
+        )
+        block = SourceBlock(
+            id="blk_year_2",
+            document_id="doc_1",
+            pdf_page_index=1,
+            block_kind=BlockKind.TABLE_CELL,
+            text="2025",
+            text_normalised="2025",
+            table_context=ctx,
+            content_hash="h_year_2",
+        )
+        cand = FactCandidate(
+            entity_raw="Solstice Robotics",
+            metric_raw="Employee count",
+            value_raw="2025",
+            scope={"plausible_year_value": True},
+            confidence_hint=0.85,
+        )
+        res = ground(cand, block)
+        assert res.accepted is True

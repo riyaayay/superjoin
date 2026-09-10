@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from fkl.domain.models import Fact, Relationship, SourceBlock
+from fkl.domain.models import ExtractionStats, Fact, Relationship, SourceBlock
 from fkl.persistence.orm import (
     CandidateAuditORM,
     DocumentORM,
@@ -49,12 +49,15 @@ def update_document_status(
     status: str,
     page_count: int | None = None,
     error_message: str | None = None,
+    canonical_entity: str | None = None,
 ) -> None:
     doc = db.get(DocumentORM, document_id)
     if doc:
         doc.status = status
         if page_count is not None:
             doc.page_count = page_count
+        if canonical_entity is not None:
+            doc.canonical_entity = canonical_entity
         if error_message is not None:
             doc.error_message = error_message
         elif status == "complete":
@@ -66,6 +69,68 @@ def update_document_status(
 
 def list_documents(db: Session) -> list[DocumentORM]:
     return db.query(DocumentORM).order_by(DocumentORM.created_at.desc()).all()
+
+
+def delete_document(db: Session, document_id: str) -> bool:
+    """Completely remove a document, its runs, facts, relationships, blocks, audits, and files."""
+    doc = db.get(DocumentORM, document_id)
+    if not doc:
+        return False
+
+    # 1. Collect fact IDs and run IDs
+    fact_ids = [r[0] for r in db.query(FactORM.id).filter(FactORM.document_id == document_id).all()]
+    run_ids = [r[0] for r in db.query(IngestionRunORM.id).filter(IngestionRunORM.document_id == document_id).all()]
+
+    # 2. Delete relationships involving these facts or created by these runs
+    if fact_ids:
+        db.query(RelationshipORM).filter(
+            (RelationshipORM.left_fact_id.in_(fact_ids)) | (RelationshipORM.right_fact_id.in_(fact_ids))
+        ).delete(synchronize_session=False)
+    if run_ids:
+        db.query(RelationshipORM).filter(
+            RelationshipORM.created_by_run_id.in_(run_ids)
+        ).delete(synchronize_session=False)
+
+    # 3. Delete candidate audits
+    db.query(CandidateAuditORM).filter(CandidateAuditORM.document_id == document_id).delete(synchronize_session=False)
+
+    # 4. Delete facts
+    db.query(FactORM).filter(FactORM.document_id == document_id).delete(synchronize_session=False)
+
+    # 5. Delete source blocks
+    db.query(SourceBlockORM).filter(SourceBlockORM.document_id == document_id).delete(synchronize_session=False)
+
+    # 6. Delete ingestion runs
+    db.query(IngestionRunORM).filter(IngestionRunORM.document_id == document_id).delete(synchronize_session=False)
+
+    # 7. Delete physical files (uploaded PDF and rendered pages)
+    try:
+        from pathlib import Path
+        from fkl.config import get_settings
+        settings = get_settings()
+
+        if doc.stored_path:
+            p = Path(doc.stored_path)
+            if p.exists():
+                p.unlink(missing_ok=True)
+
+        upload_p = settings.upload_dir / f"{document_id}.pdf"
+        if upload_p.exists():
+            upload_p.unlink(missing_ok=True)
+
+        if settings.render_dir.exists():
+            for render_file in settings.render_dir.glob(f"{document_id}*"):
+                try:
+                    render_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # 8. Delete document row
+    db.delete(doc)
+    db.commit()
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +160,11 @@ def complete_run(
     facts_created: int,
     facts_rejected: int,
     relationships_created: int,
+    insufficient_context_count: int = 0,
+    blocks_skipped_due_to_cap: int = 0,
+    stats: ExtractionStats | None = None,
+    relationships_error: str | None = None,
+    **kwargs,
 ) -> None:
     run = db.get(IngestionRunORM, run_id)
     if run:
@@ -102,6 +172,25 @@ def complete_run(
         run.facts_created = facts_created
         run.facts_rejected = facts_rejected
         run.relationships_created = relationships_created
+        run.insufficient_context_count = insufficient_context_count
+        run.blocks_skipped_due_to_cap = blocks_skipped_due_to_cap
+        if relationships_error is not None:
+            run.relationships_error = relationships_error
+        if stats is not None:
+            run.prose_blocks_total = stats.prose_blocks_total
+            run.prose_blocks_llm_called = stats.prose_blocks_llm_called
+            run.table_cells_total = stats.table_cells_total
+            run.table_cells_rejected_missing_header = stats.table_cells_rejected_missing_header
+            run.table_cells_rejected_not_numeric = stats.table_cells_rejected_not_numeric
+            run.relationship_pairs_total = stats.relationship_pairs_total
+            run.relationship_pairs_jaccard_matched = stats.relationship_pairs_jaccard_matched
+            run.relationship_pairs_llm_fallback_matched = stats.relationship_pairs_llm_fallback_matched
+            run.relationship_pairs_insufficient_context = stats.relationship_pairs_insufficient_context
+            if not blocks_skipped_due_to_cap and stats.prose_blocks_skipped_due_to_cap:
+                run.blocks_skipped_due_to_cap = stats.prose_blocks_skipped_due_to_cap
+        for k, v in kwargs.items():
+            if hasattr(run, k):
+                setattr(run, k, v)
         db.commit()
 
 
@@ -145,6 +234,7 @@ def insert_facts(db: Session, facts: list[Fact]) -> None:
             ingestion_run_id=f.ingestion_run_id,
             evidence_block_id=f.evidence_block_id,
             entity_raw=f.entity_raw,
+            entity_canonical=f.entity_canonical or f.entity_raw,
             metric_raw=f.metric_raw,
             metric_key=f.metric_key,
             value_raw=f.value_raw,
@@ -180,6 +270,7 @@ def get_facts_excluding_document(db: Session, document_id: str) -> list[FactORM]
     """Get accepted facts from all OTHER documents — for incremental comparison."""
     return (
         db.query(FactORM)
+        .join(DocumentORM, FactORM.document_id == DocumentORM.id)
         .filter(FactORM.document_id != document_id, FactORM.review_state == "accepted")
         .all()
     )

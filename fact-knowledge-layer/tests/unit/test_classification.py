@@ -204,3 +204,78 @@ class TestExplanation:
         expl = build_explanation(cmp, verdict, reason)
         assert len(expl) > 10
         assert "6.4" in expl or "corroborate" in expl.lower() or "match" in expl.lower()
+
+
+class TestSemanticMetricMatching:
+    class StubMetricProvider:
+        def __init__(self, same: bool, similarity: float, canonical_label: str = "revenue"):
+            self.same = same
+            self.similarity = similarity
+            self.canonical_label = canonical_label
+
+        def canonicalise_metric(self, left, right):
+            return {
+                "same": self.same,
+                "similarity": self.similarity,
+                "canonical_label": self.canonical_label,
+            }
+
+    def test_gray_zone_semantic_match_alias(self):
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Total turnover sales revenue", normalised_value=500.0, document_id="doc_b")
+        provider = self.StubMetricProvider(same=True, similarity=0.85, canonical_label="Total Revenue")
+        cmp = classify(left, right, metric_provider=provider)
+        verdict, reason = decide(cmp)
+        assert cmp.metric_match is True
+        assert cmp.canonical_metric_label == "Total Revenue"
+        assert verdict == Verdict.CORROBORATES
+        assert reason == ReasonCode.ALIAS_MATCH
+
+    def test_gray_zone_semantic_non_match(self):
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Total turnover sales revenue", normalised_value=500.0, document_id="doc_b")
+        provider = self.StubMetricProvider(same=False, similarity=0.2, canonical_label="Different")
+        cmp = classify(left, right, metric_provider=provider)
+        verdict, reason = decide(cmp)
+        assert cmp.metric_match is False
+        assert verdict == Verdict.INSUFFICIENT_CONTEXT
+        assert reason == ReasonCode.INSUFFICIENT_CONTEXT
+
+    def test_gray_zone_provider_exception_falls_through(self):
+        class FailingProvider:
+            def canonicalise_metric(self, left, right):
+                raise RuntimeError("API timeout")
+
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Total turnover sales revenue", normalised_value=500.0, document_id="doc_b")
+        cmp = classify(left, right, metric_provider=FailingProvider())
+        verdict, reason = decide(cmp)
+        assert cmp.metric_match is False
+        assert verdict == Verdict.INSUFFICIENT_CONTEXT
+
+
+class TestMatchMethodAndMetricScore:
+    def test_clean_above_threshold_jaccard_match(self):
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_b")
+        cmp = classify(left, right)
+        assert cmp.metric_score == 1.0
+        assert cmp.match_method == "jaccard"
+        assert cmp.metric_match is True
+
+    def test_gray_zone_llm_fallback_match(self):
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Total turnover sales revenue", normalised_value=500.0, document_id="doc_b")
+        provider = TestSemanticMetricMatching.StubMetricProvider(same=True, similarity=0.85, canonical_label="Total Revenue")
+        cmp = classify(left, right, metric_provider=provider)
+        assert 0.10 <= cmp.metric_score < 0.35
+        assert cmp.match_method == "llm_fallback"
+        assert cmp.metric_match is True
+
+    def test_no_overlap_none_match(self):
+        left = _fact(metric="Revenue from operations", normalised_value=500.0, document_id="doc_a")
+        right = _fact(metric="Completely unrelated metric", normalised_value=500.0, document_id="doc_b")
+        cmp = classify(left, right)
+        assert cmp.metric_score == 0.0
+        assert cmp.match_method == "none"
+        assert cmp.metric_match is False

@@ -20,7 +20,7 @@ os.environ["UPLOAD_DIR"] = "./data/test_uploads"
 os.environ["RENDER_DIR"] = "./data/test_renders"
 
 
-def _make_minimal_pdf() -> bytes:
+def _make_minimal_pdf(title: str = "India GDP Growth Rate") -> bytes:
     """Create a minimal but valid PDF with real text content for extraction testing."""
     try:
         from fpdf import FPDF
@@ -28,13 +28,13 @@ def _make_minimal_pdf() -> bytes:
         pdf.add_page()
         pdf.set_font("Helvetica", size=12)
         lines = [
-            "India GDP Growth Rate",
-            "Real GDP growth was 6.4% in FY25.",
-            "CPI inflation stood at 4.9% in FY24.",
-            "Fiscal deficit was 5.1% of GDP.",
+            title,
+            "Real GDP growth of the national economy was 6.4% in FY25.",
+            "CPI headline inflation rate stood at approximately 4.9% in FY24.",
+            "Fiscal deficit for the current year was recorded at 5.1% of GDP.",
         ]
         for line in lines:
-            pdf.cell(0, 10, txt=line)
+            pdf.cell(0, 10, text=line)
             pdf.ln()
         return bytes(pdf.output())
     except Exception:
@@ -159,6 +159,136 @@ class TestDocumentUpload:
 
     def test_get_nonexistent_document_404(self, client):
         r = client.get("/api/documents/doc_doesnotexist")
+        assert r.status_code == 404
+
+    def test_ingestion_coverage_report(self, client):
+        pdf_bytes = _make_minimal_pdf()
+        r = client.post(
+            "/api/documents",
+            files={"file": ("coverage_test.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert r.status_code == 200
+        doc_id = r.json()["document_id"]
+
+        r2 = client.get(f"/api/documents/{doc_id}")
+        assert r2.status_code == 200
+        doc = r2.json()
+        assert "runs" in doc
+        assert len(doc["runs"]) >= 1
+
+        run0 = doc["runs"][0]
+        # Verify all 9 coverage fields are present
+        coverage_fields = [
+            "prose_blocks_total",
+            "prose_blocks_llm_called",
+            "table_cells_total",
+            "table_cells_rejected_missing_header",
+            "table_cells_rejected_not_numeric",
+            "relationship_pairs_total",
+            "relationship_pairs_jaccard_matched",
+            "relationship_pairs_llm_fallback_matched",
+            "relationship_pairs_insufficient_context",
+        ]
+        for field in coverage_fields:
+            assert field in run0, f"Missing field {field} in runs[0]"
+            assert isinstance(run0[field], int), f"Field {field} is not int"
+
+        # Verify invariants
+        assert run0["prose_blocks_llm_called"] <= run0["prose_blocks_total"]
+        assert run0["table_cells_rejected_not_numeric"] <= run0["table_cells_total"]
+        assert run0["table_cells_rejected_missing_header"] <= run0["table_cells_total"]
+        assert (
+            run0["relationship_pairs_jaccard_matched"] + run0["relationship_pairs_llm_fallback_matched"]
+            <= run0["relationship_pairs_total"]
+        )
+
+    def test_fault_isolated_fact_persistence_on_relationship_failure(self, client, monkeypatch):
+        from fkl.application import ingest_document as ingest_mod
+
+        def _mock_build_relationships(*args, **kwargs):
+            raise RuntimeError("Simulated relationship failure")
+
+        monkeypatch.setattr(ingest_mod, "build_relationships", _mock_build_relationships)
+
+        pdf_bytes = _make_minimal_pdf(title=f"India Fault Isolation Test {uuid.uuid4().hex}")
+        r = client.post(
+            "/api/documents",
+            files={"file": ("rel_fail_test.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert r.status_code == 200
+        doc_id = r.json()["document_id"]
+
+        r2 = client.get(f"/api/documents/{doc_id}")
+        assert r2.status_code == 200
+        doc = r2.json()
+        assert doc["status"] == "relationships_failed"
+        assert doc["stats"]["facts_accepted"] > 0
+        assert len(doc["runs"]) >= 1
+        assert doc["runs"][0]["facts_created"] > 0
+        assert "Simulated relationship failure" in (doc["runs"][0]["relationships_error"] or "")
+
+        # Assert facts are accessible via facts API
+        facts_r = client.get(f"/api/facts?document_id={doc_id}")
+        assert facts_r.status_code == 200
+        facts_data = facts_r.json()
+        assert len(facts_data["items"]) > 0
+        assert facts_data["total"] > 0
+
+    def test_solstice_annual_report_end_to_end_regression(self, client):
+        fixture_path = Path("tests/fixtures/synthetic/02-solstice-annual-report-fy23.pdf")
+        assert fixture_path.exists(), "Fixture 02-solstice-annual-report-fy23.pdf missing"
+
+        pdf_bytes = fixture_path.read_bytes()
+        r = client.post(
+            "/api/documents",
+            files={"file": ("02-solstice-annual-report-fy23.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert r.status_code == 200
+        doc_id = r.json()["document_id"]
+
+        r2 = client.get(f"/api/documents/{doc_id}")
+        assert r2.status_code == 200
+        doc = r2.json()
+        assert doc["status"] == "complete"
+        assert doc["stats"]["facts_accepted"] > 0
+        assert len(doc["runs"]) >= 1
+        assert doc["runs"][0]["facts_created"] > 0
+        assert doc["runs"][0]["relationships_error"] is None
+
+        # Verify facts returned
+        facts_r = client.get(f"/api/facts?document_id={doc_id}")
+        assert facts_r.status_code == 200
+        facts_data = facts_r.json()
+        assert facts_data["total"] > 0
+
+    def test_delete_document(self, client):
+        pdf_bytes = _make_minimal_pdf()
+        r = client.post(
+            "/api/documents",
+            files={"file": ("to_delete.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert r.status_code == 200
+        doc_id = r.json()["document_id"]
+
+        # Delete it
+        del_r = client.delete(f"/api/documents/{doc_id}")
+        assert del_r.status_code == 200
+        assert del_r.json()["deleted"] is True
+
+        # Verify it is gone
+        get_r = client.get(f"/api/documents/{doc_id}")
+        assert get_r.status_code == 404
+
+        # Verify uploading again is not deduplicated
+        r2 = client.post(
+            "/api/documents",
+            files={"file": ("to_delete.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert r2.status_code == 200
+        assert r2.json()["deduplicated"] is False
+
+    def test_delete_nonexistent_document_404(self, client):
+        r = client.delete("/api/documents/doc_doesnotexist")
         assert r.status_code == 404
 
 

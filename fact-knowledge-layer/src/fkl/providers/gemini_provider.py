@@ -41,7 +41,7 @@ _EXTRACT_SCHEMA = {
     },
 }
 
-_EXTRACT_SYSTEM = """You are a precise fact extractor for institutional financial/economic documents.
+_EXTRACT_SYSTEM = """You are a precise fact extractor for institutional financial/economic documents and corporate disclosures.
 
 Rules:
 1. Extract ONLY facts that are literally present in the supplied TEXT BLOCK.
@@ -51,8 +51,9 @@ Rules:
 5. Do NOT use document filename, company name, or source-set-specific rules.
 6. For numeric facts: capture the literal value including units/scale as written.
 7. For percentage facts: capture the number and '%' as written.
-8. scope should be a dict, e.g. {"consolidation": "standalone"} or {}.
-9. confidence_hint: 0.0-1.0, where 1.0 = the value is unambiguously stated."""
+8. Also extract semantic and governance facts (appointments, resignations, retirements, corporate actions, policy/status declarations), even with no numeric value. metric_raw must only use role/title/topic words that appear verbatim in the source text. Never substitute, infer, or embellish with a different or more senior-sounding title. value_raw is the key action or role/target described.
+9. scope should be a dict, e.g. {"consolidation": "standalone"} or {}.
+10. confidence_hint: 0.0-1.0, where 1.0 = the value is unambiguously stated."""
 
 _EXTRACT_USER = """Extract facts from this text block. Return a JSON array of fact objects.
 
@@ -98,6 +99,7 @@ class GeminiProvider:
         # Minimum interval between API calls (seconds). Add 10% headroom.
         self._min_interval = (60.0 / rpm_limit) * 1.1
         self._last_call_time: float = 0.0
+        self._metric_cache: dict[tuple[str, str], dict] = {}
 
     def _throttle(self) -> None:
         """Block until enough time has passed to stay within RPM limit."""
@@ -118,7 +120,7 @@ class GeminiProvider:
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
-                    retry_secs = _parse_retry_delay(err_str)
+                    retry_secs = min(_parse_retry_delay(err_str), 25.0)
                     if attempt < self._max_retries:
                         logger.warning(
                             "429 rate limit on attempt %d/%d — waiting %.1fs before retry",
@@ -134,12 +136,18 @@ class GeminiProvider:
         raise RuntimeError("Unreachable")
 
     def extract_facts(
-        self, *, block: SourceBlock, document_context: str
+        self,
+        *,
+        block: SourceBlock,
+        document_context: str,
+        canonical_entity: str | None = None,
     ) -> list[FactCandidate]:
+        """Extract facts from a single SourceBlock using Gemini with JSON mode."""
         prompt = _EXTRACT_USER.format(
-            context=document_context[:300],
-            text=block.text[:2000],
+            context=document_context or "General Document",
+            text=block.text,
         )
+
         try:
             raw = self._generate_with_retry(
                 prompt,
@@ -156,7 +164,7 @@ class GeminiProvider:
             if not isinstance(data, list):
                 logger.warning("LLM returned non-list: %s", type(data))
                 return []
-            fallback_entity = (document_context.split("-")[0].strip() or "Entity")[:100]
+            fallback_entity = canonical_entity or "Entity"
             candidates = []
             for item in data:
                 if not isinstance(item, dict):
@@ -177,6 +185,22 @@ class GeminiProvider:
             return []
 
     def canonicalise_metric(self, *, left: Fact, right: Fact) -> dict:
+        l_str = (left.metric_raw or "").strip().lower()
+        r_str = (right.metric_raw or "").strip().lower()
+        if not l_str or not r_str:
+            return {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
+        if l_str == r_str:
+            return {
+                "same": True,
+                "canonical": left.metric_raw,
+                "canonical_label": left.metric_raw,
+                "similarity": 1.0,
+            }
+
+        cache_key = tuple(sorted([l_str, r_str]))
+        if cache_key in self._metric_cache:
+            return self._metric_cache[cache_key]
+
         prompt = (
             f"Are these two metric descriptions referring to the same underlying measurement? "
             f"Left: '{left.metric_raw}'. Right: '{right.metric_raw}'. "
@@ -193,10 +217,18 @@ class GeminiProvider:
             )
             raw = re.sub(r"^```(?:json)?\n?", "", raw)
             raw = re.sub(r"\n?```$", "", raw)
-            return json.loads(raw)
+            res = json.loads(raw)
+            if not isinstance(res, dict):
+                res = {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
+            if "canonical" in res and "canonical_label" not in res:
+                res["canonical_label"] = res["canonical"]
+            self._metric_cache[cache_key] = res
+            return res
         except Exception as e:
             logger.error("Gemini canonicalise_metric error: %s", e)
-            return {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
+            fallback = {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
+            self._metric_cache[cache_key] = fallback
+            return fallback
 
     def explain_relationship(self, *, comparison: ComparisonResult) -> str:
         """Generate a concise human explanation grounded in the comparison fields."""

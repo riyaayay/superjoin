@@ -6,6 +6,7 @@
   <a href="/" class="btn btn-ghost btn-sm">← Back</a>
   <h1 style="font-size:1.3rem;font-weight:700">Document Detail</h1>
   <span id="doc-status"><span class="spinner"></span></span>
+  <button id="btn-delete-doc" class="btn btn-ghost btn-sm text-red" style="margin-left:auto;border:1px solid rgba(239,68,68,0.3);cursor:pointer">🗑 Delete Document</button>
 </div>
 
 <div class="stats-row">
@@ -68,6 +69,34 @@
       if (el('facts-rejected-count')) el('facts-rejected-count').textContent = s.facts_rejected_candidates ?? '—';
       if (el('rels-count')) el('rels-count').textContent = s.relationships ?? '—';
       if (el('doc-pages')) el('doc-pages').textContent = doc.page_count ?? '—';
+
+      if (!doc.canonical_entity && doc.status === 'complete') {
+        const errEl = el('doc-error');
+        if (errEl && !errEl.innerHTML) {
+          errEl.innerHTML = `<div class="card mb-16" style="border-left:4px solid #f59e0b;padding:12px 16px;background:rgba(245,158,11,0.08);color:#f59e0b;font-size:0.85rem">
+            ⚠ Warning: Entity resolution failed for this document — facts may have inconsistent entity attribution.
+          </div>`;
+        }
+      }
+
+      const delBtn = el('btn-delete-doc');
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          const fname = doc.original_filename || window.__DOC_ID__;
+          if (!confirm(`Are you sure you want to delete "${fname}" and all its extracted facts?`)) return;
+          delBtn.disabled = true;
+          delBtn.textContent = 'Deleting…';
+          try {
+            await API.deleteDocument(window.__DOC_ID__);
+            toast('Document deleted successfully', 'success');
+            setTimeout(() => { window.location.href = '/'; }, 600);
+          } catch (err) {
+            toast(err.message || 'Failed to delete', 'error');
+            delBtn.disabled = false;
+            delBtn.textContent = '🗑 Delete Document';
+          }
+        });
+      }
     });
   });
 </script>

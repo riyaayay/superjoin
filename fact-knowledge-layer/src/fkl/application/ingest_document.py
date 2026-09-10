@@ -17,7 +17,7 @@ from pathlib import Path
 from fkl.config import get_settings
 from fkl.domain.enums import BlockKind, ExtractionMethod, ReviewState, UnitDimension, ValueKind
 from fkl.domain.models import Fact, IngestionSummary, NormalisationStep
-from fkl.domain.normalisation import detect_scale, normalise_value, parse_numeric, parse_period
+from fkl.domain.normalisation import detect_fy_end_month, detect_scale, normalise_value, parse_numeric, parse_period
 from fkl.persistence import database, repositories
 from fkl.pipeline.build_relationships import build_relationships
 from fkl.pipeline.extract_table_facts import extract_table_facts
@@ -45,13 +45,15 @@ def _make_fact(
     run_id: str,
     document_id: str,
     extraction_method: ExtractionMethod,
+    canonical_entity: str | None = None,
+    doc_context: str | None = None,
 ) -> Fact:
     """Build an immutable Fact from an accepted candidate + grounding result."""
     numeric = parse_numeric(candidate.value_raw)
     unit_context = f"{candidate.unit_raw or ''} {candidate.period_raw or ''}".lower()
     scale = detect_scale(unit_context)
 
-    norm = normalise_value(candidate.value_raw, candidate.unit_raw, scale)
+    norm = normalise_value(candidate.value_raw, candidate.unit_raw, scale, doc_context=doc_context)
 
     # Determine value kind
     if numeric is not None:
@@ -69,16 +71,61 @@ def _make_fact(
         udim = UnitDimension.UNKNOWN
 
     # Period
-    period_info = parse_period(f"{candidate.period_raw or ''} {candidate.unit_raw or ''}")
+    period_info = parse_period(
+        f"{candidate.period_raw or ''} {candidate.unit_raw or ''}",
+        doc_context=doc_context,
+    )
 
     scope = candidate.scope or {}
+
+    ent_raw = (candidate.entity_raw or "").strip()
+    _GENERIC_ENTITIES = {
+        "the company", "company", "the group", "group",
+        "the corporation", "corporation", "the bank", "the firm", "entity", ""
+    }
+    _TABLE_TITLE_INDICATORS = (
+        "statement of", "balance sheet", "profit and loss", "profit & loss",
+        "cash flow", "financial results", "income statement", "comprehensive income",
+        "extract", "notes to", "particulars", "annual report", "unaudited", "audited"
+    )
+    is_table_caption = any(ind in ent_raw.lower() for ind in _TABLE_TITLE_INDICATORS)
+    is_generic = ent_raw.lower() in _GENERIC_ENTITIES
+
+    if canonical_entity and (extraction_method == ExtractionMethod.TABLE_RULE or is_table_caption or is_generic):
+        entity_canonical = canonical_entity
+        entity_raw = canonical_entity
+    elif canonical_entity and ent_raw.lower() == canonical_entity.lower():
+        entity_canonical = canonical_entity
+        entity_raw = canonical_entity
+    elif canonical_entity:
+        entity_canonical = canonical_entity
+        entity_raw = ent_raw if ent_raw else canonical_entity
+    else:
+        entity_canonical = ent_raw if ent_raw else "Entity"
+        entity_raw = ent_raw or "Entity"
+
+    # Wire confidence threshold to review state (Fix 4)
+    review_state = ReviewState.NEEDS_REVIEW if grounding.confidence < 0.65 else ReviewState.ACCEPTED
+
+    # Wire role status for governance/personnel facts (R6)
+    from fkl.pipeline.deduplicate import detect_role_status
+    role_status = getattr(candidate, "role_status", None) or detect_role_status(candidate)
+    qualifiers = {}
+    if period_info.get("period_convention") == "unknown":
+        qualifiers["period_convention"] = "unknown"
+    if role_status:
+        scope["role_status"] = role_status
+        qualifiers["role_status"] = role_status
+    if scope.get("unrecognized_qualifier"):
+        qualifiers["unrecognized_qualifier"] = scope["unrecognized_qualifier"]
 
     return Fact(
         id=f"fact_{uuid.uuid4().hex[:14]}",
         document_id=document_id,
         ingestion_run_id=run_id,
         evidence_block_id=grounding.evidence_block_id,
-        entity_raw=candidate.entity_raw,
+        entity_raw=entity_raw,
+        entity_canonical=entity_canonical,
         metric_raw=candidate.metric_raw,
         metric_key=candidate.metric_raw.lower().strip(),
         value_raw=candidate.value_raw,
@@ -92,11 +139,12 @@ def _make_fact(
         period_raw=candidate.period_raw,
         period_start=period_info.get("start"),
         period_end=period_info.get("end"),
+        role_status=role_status,
         scope=scope,
-        qualifiers={},
+        qualifiers=qualifiers,
         extraction_method=extraction_method,
         confidence=grounding.confidence,
-        review_state=ReviewState.ACCEPTED,
+        review_state=review_state,
         normalisation_provenance=norm.steps,
         created_at=datetime.now(timezone.utc),
     )
@@ -132,7 +180,7 @@ def ingest_document(document_id: str) -> IngestionSummary:
         # --- Stage 1: Parse PDF ---
         logger.info("[%s] Stage 1: parsing PDF", document_id)
         try:
-            blocks, page_count, parse_warnings = parse_pdf(document_id, pdf_path)
+            blocks, page_count, parse_warnings, canonical_entity = parse_pdf(document_id, pdf_path)
             warnings.extend(parse_warnings)
         except Exception as e:
             logger.error("[%s] Parse failed: %s", document_id, e)
@@ -143,14 +191,32 @@ def ingest_document(document_id: str) -> IngestionSummary:
                 warnings=[str(e)],
             )
 
-        repositories.update_document_status(db, document_id, "processing", page_count=page_count)
+        repositories.update_document_status(
+            db, document_id, "processing", page_count=page_count, canonical_entity=canonical_entity
+        )
         repositories.insert_blocks(db, blocks)
-        logger.info("[%s] Parsed %d blocks from %d pages", document_id, len(blocks), page_count)
+        logger.info(
+            "[%s] Parsed %d blocks from %d pages (canonical entity: %s)",
+            document_id, len(blocks), page_count, canonical_entity
+        )
+
+        # Extract doc_context for fiscal year convention from heading and paragraph blocks (first match stop)
+        doc_context: str | None = None
+        for b in blocks:
+            if b.block_kind in (BlockKind.HEADING, BlockKind.PARAGRAPH):
+                if detect_fy_end_month(b.text):
+                    doc_context = b.text
+                    break
 
         # --- Stage 2: Extract candidates ---
         logger.info("[%s] Stage 2: extracting candidates", document_id)
-        table_candidates = extract_table_facts(blocks)
-        text_candidates = extract_text_facts(blocks, provider)
+        text_candidates, text_stats = extract_text_facts(
+            blocks, provider, canonical_entity=canonical_entity
+        )
+        table_candidates = extract_table_facts(
+            blocks, canonical_entity=canonical_entity, stats=text_stats
+        )
+        blocks_skipped_due_to_cap = text_stats.prose_blocks_skipped_due_to_cap
 
         # Collect chart/figure blocks as candidates to explicitly audit visual non-extraction (Demo Case #4)
         chart_candidates: list[tuple[FactCandidate, SourceBlock, ExtractionMethod]] = []
@@ -184,7 +250,10 @@ def ingest_document(document_id: str) -> IngestionSummary:
         for candidate, block, method in all_candidates:
             result = ground(candidate, block)
             if result.accepted:
-                fact = _make_fact(candidate, result, run_id, document_id, method)
+                fact = _make_fact(
+                    candidate, result, run_id, document_id, method,
+                    canonical_entity=canonical_entity, doc_context=doc_context
+                )
                 accepted_facts.append(fact)
             else:
                 rejected_audit.append({
@@ -205,21 +274,54 @@ def ingest_document(document_id: str) -> IngestionSummary:
             document_id, len(accepted_facts), len(rejected_audit)
         )
 
-        # --- Stage 4: Persist facts ---
+        # --- Stage 4: Deduplicate & Persist facts ---
+        from fkl.pipeline.deduplicate import deduplicate_candidates
         if accepted_facts:
+            accepted_facts = deduplicate_candidates(accepted_facts)
             repositories.insert_facts(db, accepted_facts)
         if rejected_audit:
             repositories.insert_candidate_audit(db, rejected_audit)
 
+        # Document-level entity consistency check
+        distinct_entities = set(f.entity_canonical for f in accepted_facts if f.entity_canonical)
+        if len(distinct_entities) > 2:
+            warn_msg = (
+                f"Document contains {len(distinct_entities)} distinct canonical entities: {distinct_entities}. "
+                "Possible inconsistent entity attribution."
+            )
+            logger.warning("[%s] %s", document_id, warn_msg)
+            warnings.append(warn_msg)
+
         # --- Stage 5: Build relationships (incremental) ---
         logger.info("[%s] Stage 5: building relationships", document_id)
-        existing_rows = repositories.get_facts_excluding_document(db, document_id)
-        relationships = build_relationships(accepted_facts, existing_rows, run_id)
+        relationships: list[Relationship] = []
+        insufficient_context_count = 0
+        relationships_error: str | None = None
 
-        if relationships:
-            repositories.insert_relationships(db, relationships)
+        try:
+            existing_rows = repositories.get_facts_excluding_document(db, document_id)
+            insufficient_counter = [0]
+            relationships = build_relationships(
+                accepted_facts,
+                existing_rows,
+                run_id,
+                metric_provider=provider,
+                insufficient_context_counter=insufficient_counter,
+                stats=text_stats,
+            )
+            insufficient_context_count = insufficient_counter[0]
 
-        logger.info("[%s] Relationships: %d created", document_id, len(relationships))
+            if relationships:
+                repositories.insert_relationships(db, relationships)
+
+            logger.info(
+                "[%s] Relationships: %d created (%d insufficient context skipped)",
+                document_id, len(relationships), insufficient_context_count
+            )
+        except Exception as rel_err:
+            logger.exception("[%s] Stage 5 relationship building failed: %s", document_id, rel_err)
+            relationships_error = str(rel_err)
+            warnings.append(f"Relationship building failed: {rel_err}")
 
         # --- Complete ---
         repositories.complete_run(
@@ -227,11 +329,18 @@ def ingest_document(document_id: str) -> IngestionSummary:
             facts_created=len(accepted_facts),
             facts_rejected=len(rejected_audit),
             relationships_created=len(relationships),
+            insufficient_context_count=insufficient_context_count,
+            blocks_skipped_due_to_cap=blocks_skipped_due_to_cap,
+            stats=text_stats,
+            relationships_error=relationships_error,
         )
-        repositories.update_document_status(db, document_id, "complete")
-
+        final_status = "relationships_failed" if relationships_error else "complete"
+        repositories.update_document_status(
+            db, document_id, final_status,
+            error_message=relationships_error if relationships_error else None,
+        )
         duration = time.monotonic() - t_start
-        logger.info("[%s] Ingestion complete in %.1fs", document_id, duration)
+        logger.info("[%s] Ingestion complete (status: %s) in %.1fs", document_id, final_status, duration)
 
         return IngestionSummary(
             run_id=run_id,
@@ -241,12 +350,15 @@ def ingest_document(document_id: str) -> IngestionSummary:
             relationships_created=len(relationships),
             warnings=warnings,
             duration_seconds=round(duration, 2),
+            stats=text_stats,
         )
 
     except Exception as e:
         logger.exception("[%s] Ingestion pipeline error: %s", document_id, e)
         try:
-            repositories.complete_run(db, run_id, 0, 0, 0)
+            fc = len(accepted_facts) if "accepted_facts" in locals() else 0
+            fr = len(rejected_audit) if "rejected_audit" in locals() else 0
+            repositories.complete_run(db, run_id, fc, fr, 0)
         except Exception:
             pass
         repositories.update_document_status(db, document_id, "failed", error_message=str(e))

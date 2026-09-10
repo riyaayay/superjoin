@@ -7,6 +7,7 @@ The decision table from the implementation blueprint is implemented here.
 from __future__ import annotations
 
 import re
+from typing import Any, Literal
 
 from fkl.domain.enums import ReasonCode, Verdict
 from fkl.domain.models import ComparisonResult, Fact
@@ -44,9 +45,13 @@ def entity_overlap(a: str, b: str) -> float:
 
 
 def _scope_label(fact: Fact) -> str | None:
-    """Extract single canonical scope label if available."""
+    """Extract single canonical scope label incorporating role_status if present."""
     scope = fact.scope or {}
-    return scope.get("consolidation") or scope.get("scope") or scope.get("level")
+    base_scope = scope.get("consolidation") or scope.get("scope") or scope.get("level")
+    role_status = getattr(fact, "role_status", None) or scope.get("role_status")
+    if base_scope and role_status:
+        return f"{base_scope}:{role_status}"
+    return base_scope or role_status
 
 
 def _period_label(fact: Fact) -> str | None:
@@ -93,17 +98,107 @@ def _try_convert(left: Fact, right: Fact) -> tuple[float | None, float | None, f
 # ---------------------------------------------------------------------------
 
 METRIC_THRESHOLD = 0.35
+METRIC_GRAY_LOW = 0.10
 ENTITY_THRESHOLD = 0.25
 
 
-def classify(left: Fact, right: Fact) -> ComparisonResult:
-    """Apply the decision table and return a ComparisonResult."""
-    # Metric and entity matching
-    m_score = metric_overlap(left.metric_raw, right.metric_raw)
-    e_score = entity_overlap(left.entity_raw, right.entity_raw)
+_CONFLICTING_METRIC_PAIRS = [
+    ({"income", "revenue"}, {"expense", "expenses", "expenditure", "cost", "costs"}),
+    ({"asset", "assets"}, {"liability", "liabilities"}),
+    ({"import", "imports"}, {"export", "exports"}),
+    ({"revenue from operations"}, {"other income"}),
+    ({"operating profit", "ebit"}, {"net profit", "pat"}),
+    ({"employee", "employees", "workforce", "headcount", "personnel"}, {"income", "revenue", "expense", "expenses", "profit", "assets", "liabilities", "consumption", "power", "electricity"}),
+    ({"consumption", "electricity", "energy", "power"}, {"income", "revenue", "expense", "expenses", "profit", "employee", "employees", "workforce"}),
+]
 
-    metric_match = m_score >= METRIC_THRESHOLD
+
+def is_conflicting_metric(left_raw: str, right_raw: str) -> bool:
+    """Return True if two metric names express mutually exclusive/opposing financial concepts."""
+    import re
+    l_tokens = set(re.findall(r"[a-z0-9]+", (left_raw or "").lower()))
+    r_tokens = set(re.findall(r"[a-z0-9]+", (right_raw or "").lower()))
+    for group_a, group_b in _CONFLICTING_METRIC_PAIRS:
+        if (l_tokens & group_a and r_tokens & group_b) or (l_tokens & group_b and r_tokens & group_a):
+            return True
+    return False
+
+
+def check_metric_equivalence(
+    left: Fact,
+    right: Fact,
+    metric_provider: Any = None,
+) -> bool:
+    """
+    Mandatory metric equivalence check before CORROBORATES or LIKELY_CONFLICT.
+    Requires that two metrics measure the same economic/financial concept.
+    """
+    l_raw = (left.metric_raw or "").strip().lower()
+    r_raw = (right.metric_raw or "").strip().lower()
+    if l_raw == r_raw:
+        return True
+
+    if is_conflicting_metric(l_raw, r_raw):
+        return False
+
+    # High lexical overlap threshold for synonymous phrasing without conflicting keywords
+    score = metric_overlap(left.metric_raw, right.metric_raw)
+    return score >= METRIC_THRESHOLD
+
+
+def classify(
+    left: Fact,
+    right: Fact,
+    metric_provider: Any = None,
+    metric_equivalent: bool | None = None,
+) -> ComparisonResult:
+    """Apply the decision table and return a ComparisonResult."""
+    # Metric and entity matching (using canonical entity when available)
+    left_ent = left.entity_canonical or left.entity_raw
+    right_ent = right.entity_canonical or right.entity_raw
+    m_score = metric_overlap(left.metric_raw, right.metric_raw)
+    e_score = entity_overlap(left_ent, right_ent)
+
+    canonical_metric_label: str | None = None
+    alias_matched = False
+    match_method: Literal["jaccard", "llm_fallback", "none"] = "none"
+
+    if m_score >= METRIC_THRESHOLD:
+        metric_match = True
+        match_method = "jaccard"
+    elif METRIC_GRAY_LOW <= m_score < METRIC_THRESHOLD and metric_provider is not None:
+        l_raw = (left.metric_raw or "").strip().lower()
+        r_raw = (right.metric_raw or "").strip().lower()
+        if is_conflicting_metric(l_raw, r_raw):
+            metric_match = False
+        elif hasattr(metric_provider, "canonicalise_metric"):
+            try:
+                res = metric_provider.canonicalise_metric(left=left, right=right)
+                if isinstance(res, dict) and res.get("same") is True and res.get("similarity", 0) >= 0.7:
+                    metric_match = True
+                    alias_matched = True
+                    canonical_metric_label = res.get("canonical_label") or res.get("canonical")
+                    match_method = "llm_fallback"
+                else:
+                    metric_match = False
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Semantic metric canonicalisation failed: %s", e)
+                metric_match = False
+        else:
+            metric_match = False
+    else:
+        metric_match = False
+
     entity_match = e_score >= ENTITY_THRESHOLD
+
+    if metric_equivalent is None:
+        if alias_matched:
+            metric_equivalent = True
+        elif metric_match:
+            metric_equivalent = not is_conflicting_metric(left.metric_raw, right.metric_raw)
+        else:
+            metric_equivalent = False
 
     # Scope and period
     scope_l = _scope_label(left)
@@ -130,12 +225,16 @@ def classify(left: Fact, right: Fact) -> ComparisonResult:
         scale_m = SCALE_TO_MULTIPLIER.get((left.normalised_unit or "").lower(), 1.0)
         tolerance = rounding_tolerance(raw_str, scale_m) + rounding_tolerance(right.value_raw, SCALE_TO_MULTIPLIER.get((right.normalised_unit or "").lower(), 1.0))
         value_within_tol = abs(lv_conv - rv_conv) <= tolerance
+    elif left.value_raw and right.value_raw and left.value_kind.value == "text" and right.value_kind.value == "text":
+        if normalise_text(left.value_raw) == normalise_text(right.value_raw):
+            value_within_tol = True
 
     return ComparisonResult(
         left_fact_id=left.id,
         right_fact_id=right.id,
         metric_match=metric_match,
         entity_match=entity_match,
+        metric_equivalent=metric_equivalent,
         period_match=period_match,
         scope_match=scope_match,
         left_normalised=lv_conv,
@@ -150,30 +249,43 @@ def classify(left: Fact, right: Fact) -> ComparisonResult:
         period_right=period_r,
         evidence_quality_left=left.confidence,
         evidence_quality_right=right.confidence,
+        canonical_metric_label=canonical_metric_label,
+        metric_score=m_score,
+        match_method=match_method,
     )
 
 
 def decide(cmp: ComparisonResult) -> tuple[Verdict, ReasonCode]:
-    """Apply the decision table to produce verdict + reason_code."""
-    # Insufficient data
+    """Apply the decision table to produce verdict + reason_code (R8 order)."""
+    # 1. Entity & Metric token matching
     if not cmp.metric_match or not cmp.entity_match:
         return Verdict.INSUFFICIENT_CONTEXT, ReasonCode.INSUFFICIENT_CONTEXT
 
-    if cmp.left_normalised is None or cmp.right_normalised is None:
-        return Verdict.INSUFFICIENT_CONTEXT, ReasonCode.LOW_EVIDENCE_QUALITY
+    # 2. Mandatory metric equivalence gate (must run before scope/role_status)
+    if not cmp.metric_equivalent:
+        return Verdict.INSUFFICIENT_CONTEXT, ReasonCode.INSUFFICIENT_CONTEXT
 
-    # Period differs → reconcile
+    # 3. Scope differs (folds in role_status via _scope_label) → reconcile
+    if cmp.scope_match is False:
+        return Verdict.RECONCILES, ReasonCode.DIFFERENT_SCOPE
+
+    # 4. Period differs → reconcile
     if cmp.period_match is False:
         return Verdict.RECONCILES, ReasonCode.DIFFERENT_PERIOD
 
-    # Scope differs (same period or unknown period) → reconcile
-    if cmp.scope_match is False:
-        return Verdict.RECONCILES, ReasonCode.DIFFERENT_SCOPE
+    # Check if this was an alias match
+    is_alias = bool(getattr(cmp, "canonical_metric_label", None))
+
+    # Non-numeric / semantic facts with matching metric, entity, scope, period
+    if cmp.left_normalised is None or cmp.right_normalised is None:
+        if cmp.value_within_tolerance:
+            return Verdict.CORROBORATES, ReasonCode.ALIAS_MATCH if is_alias else ReasonCode.EXACT_MATCH
+        return Verdict.INSUFFICIENT_CONTEXT, ReasonCode.LOW_EVIDENCE_QUALITY
 
     # Unit/scale conversion was needed to make values comparable
     if cmp.unit_conversion_applied:
         if cmp.value_within_tolerance:
-            return Verdict.CORROBORATES, ReasonCode.UNIT_OR_SCALE_DIFFERENCE
+            return Verdict.CORROBORATES, ReasonCode.ALIAS_MATCH if is_alias else ReasonCode.UNIT_OR_SCALE_DIFFERENCE
         else:
             # Values differ even after conversion — possible conflict
             if cmp.evidence_quality_left >= 0.6 and cmp.evidence_quality_right >= 0.6:
@@ -182,6 +294,8 @@ def decide(cmp: ComparisonResult) -> tuple[Verdict, ReasonCode]:
 
     # Same units
     if cmp.value_within_tolerance:
+        if is_alias:
+            return Verdict.CORROBORATES, ReasonCode.ALIAS_MATCH
         tol = cmp.tolerance or 0
         diff = abs((cmp.left_normalised or 0) - (cmp.right_normalised or 0))
         if diff == 0:
@@ -199,7 +313,11 @@ def build_explanation(cmp: ComparisonResult, verdict: Verdict, reason: ReasonCod
     parts: list[str] = []
 
     if reason == ReasonCode.EXACT_MATCH:
-        parts.append(f"Both facts report the same value ({cmp.left_normalised}) for the same metric, entity, and period.")
+        val_str = str(cmp.left_normalised) if cmp.left_normalised is not None else "the reported value"
+        parts.append(f"Both facts report the same value ({val_str}) for the same metric, entity, and period.")
+    elif reason == ReasonCode.ALIAS_MATCH:
+        label = cmp.canonical_metric_label or "semantic equivalent"
+        parts.append(f"Metrics matched via semantic alias ('{label}'). Values corroborated within precision.")
     elif reason == ReasonCode.ROUNDED_MATCH:
         diff = abs((cmp.left_normalised or 0) - (cmp.right_normalised or 0))
         parts.append(

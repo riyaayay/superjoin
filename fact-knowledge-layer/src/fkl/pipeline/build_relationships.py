@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from fkl.domain.classification import build_explanation, classify, decide
 from fkl.domain.enums import RelationshipReviewState, UnitDimension
-from fkl.domain.models import Fact, Relationship
+from fkl.domain.models import ExtractionStats, Fact, Relationship
 from fkl.persistence.orm import FactORM
 
 logger = logging.getLogger(__name__)
@@ -24,12 +24,16 @@ def _orm_to_fact(row: FactORM) -> Fact:
     from fkl.domain.enums import ExtractionMethod, ReviewState, ValueKind
     from fkl.domain.models import NormalisationStep
 
+    scope_data = json.loads(row.scope_json or "{}")
+    role_status = scope_data.get("role_status")
+
     return Fact(
         id=row.id,
         document_id=row.document_id,
         ingestion_run_id=row.ingestion_run_id,
         evidence_block_id=row.evidence_block_id,
         entity_raw=row.entity_raw,
+        entity_canonical=row.entity_canonical or row.entity_raw,
         metric_raw=row.metric_raw,
         metric_key=row.metric_key,
         value_raw=row.value_raw,
@@ -43,7 +47,8 @@ def _orm_to_fact(row: FactORM) -> Fact:
         period_raw=row.period_raw,
         period_start=row.period_start,
         period_end=row.period_end,
-        scope=json.loads(row.scope_json or "{}"),
+        role_status=role_status,
+        scope=scope_data,
         qualifiers=json.loads(row.qualifiers_json or "{}"),
         extraction_method=ExtractionMethod(row.extraction_method),
         confidence=row.confidence,
@@ -55,49 +60,123 @@ def _orm_to_fact(row: FactORM) -> Fact:
     )
 
 
-def _blocking_key(fact: Fact) -> frozenset[str]:
-    """
-    Deterministic blocking key from entity + metric tokens.
-    Two facts share a key-overlap if they might be about the same measurement.
-    """
+_STOP_WORDS = frozenset({"the", "a", "an", "of", "in", "at", "by", "for", "to", "from", "and", "or", "on", "as", "is"})
+ENTITY_BLOCKING_THRESHOLD = 0.25
+METRIC_BLOCKING_THRESHOLD = 0.10  # Aligned with METRIC_GRAY_LOW for semantic matching
+
+
+def _tokenize(text: str) -> frozenset[str]:
     import re
-    tokens = re.findall(r"[a-z0-9]+", (fact.entity_raw + " " + fact.metric_raw).lower())
-    stop = {"the", "a", "an", "of", "in", "at", "by", "for", "to", "from", "and", "or", "on"}
-    meaningful = frozenset(t for t in tokens if t not in stop and len(t) > 2)
-    return meaningful
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return frozenset(t for t in tokens if t not in _STOP_WORDS and len(t) > 2)
 
 
-def _keys_overlap(a: frozenset[str], b: frozenset[str]) -> bool:
-    return bool(a & b)
+def _blocking_keys(fact: Fact) -> tuple[frozenset[str], frozenset[str]]:
+    """Return separate entity and metric token sets for independent blocking."""
+    ent_text = fact.entity_canonical or fact.entity_raw
+    met_text = fact.metric_key or fact.metric_raw
+    return _tokenize(ent_text), _tokenize(met_text)
+
+
+def _blocking_key(fact: Fact) -> frozenset[str]:
+    """Compatibility helper for legacy code and unit tests."""
+    ent_tokens, met_tokens = _blocking_keys(fact)
+    return ent_tokens | met_tokens
+
+
+def _passes_blocking(
+    left: tuple[frozenset[str], frozenset[str]] | Fact | FactORM,
+    right: tuple[frozenset[str], frozenset[str]] | Fact | FactORM,
+) -> bool:
+    """A pair passes blocking only if entity AND metric thresholds are both met."""
+    l_ent, l_met = left if isinstance(left, tuple) else _blocking_keys(left)
+    r_ent, r_met = right if isinstance(right, tuple) else _blocking_keys(right)
+
+    ent_union = l_ent | r_ent
+    if not ent_union:
+        return False
+    ent_jaccard = len(l_ent & r_ent) / len(ent_union)
+    if ent_jaccard < ENTITY_BLOCKING_THRESHOLD:
+        return False
+
+    met_union = l_met | r_met
+    if not met_union:
+        return False
+    met_jaccard = len(l_met & r_met) / len(met_union)
+    if met_jaccard < METRIC_BLOCKING_THRESHOLD:
+        return False
+
+    return True
+
+
+class _CallCappedProvider:
+    """Wraps provider to strictly enforce a maximum number of LLM invocations per run."""
+    def __init__(self, inner: Any, max_calls: int = 5):
+        self._inner = inner
+        self._max_calls = max_calls
+        self.calls = 0
+
+    def canonicalise_metric(self, left: Fact, right: Fact) -> dict:
+        if self.calls >= self._max_calls:
+            return {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
+        self.calls += 1
+        return self._inner.canonicalise_metric(left=left, right=right)
+
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
 
 
 def build_relationships(
     new_facts: list[Fact],
     existing_fact_rows: list[FactORM],
     run_id: str,
+    metric_provider: Any = None,
+    insufficient_context_counter: list[int] | None = None,
+    stats: ExtractionStats | None = None,
 ) -> list[Relationship]:
     """
     Compare each new_fact against existing accepted facts from other documents.
 
     Incremental: only pairs touching a new fact are evaluated.
     Old-old pairs are never recomputed.
+    Pairs failing blocking or resolving to INSUFFICIENT_CONTEXT are not persisted.
     """
     relationships: list[Relationship] = []
     seen_pairs: set[tuple[str, str]] = set()
 
     existing_facts = [_orm_to_fact(row) for row in existing_fact_rows]
+    existing_keys = [(f, _blocking_keys(f)) for f in existing_facts]
+
+    provider_to_pass = (
+        _CallCappedProvider(metric_provider, max_calls=5)
+        if metric_provider is not None and hasattr(metric_provider, "canonicalise_metric")
+        else metric_provider
+    )
 
     for new_fact in new_facts:
-        new_key = _blocking_key(new_fact)
+        new_keys = _blocking_keys(new_fact)
 
-        for existing_fact in existing_facts:
+        for existing_fact, ex_keys in existing_keys:
             # Must be from a different document
             if existing_fact.document_id == new_fact.document_id:
                 continue
 
-            # Blocking: must share at least one meaningful token
-            ex_key = _blocking_key(existing_fact)
-            if not _keys_overlap(new_key, ex_key):
+            # Incompatible dimensions cannot match
+            if (
+                new_fact.unit_dimension
+                and existing_fact.unit_dimension
+                and new_fact.unit_dimension != UnitDimension.UNKNOWN
+                and existing_fact.unit_dimension != UnitDimension.UNKNOWN
+                and new_fact.unit_dimension != existing_fact.unit_dimension
+            ):
+                continue
+
+            # Incompatible value kinds cannot match
+            if new_fact.value_kind and existing_fact.value_kind and new_fact.value_kind != existing_fact.value_kind:
+                continue
+
+            # Independent 2D blocking (entity AND metric dimensions)
+            if not _passes_blocking(new_keys, ex_keys):
                 continue
 
             # Canonical pair ordering to avoid duplicates
@@ -106,11 +185,30 @@ def build_relationships(
                 continue
             seen_pairs.add(pair)
 
+            if stats is not None:
+                stats.relationship_pairs_total += 1
+
             # Classify
             left = new_fact
             right = existing_fact
-            cmp = classify(left, right)
+            cmp = classify(left, right, metric_provider=provider_to_pass)
             verdict, reason = decide(cmp)
+
+            # Transparency: do not let INSUFFICIENT_CONTEXT dominate /api/relationships
+            from fkl.domain.enums import Verdict
+            if verdict == Verdict.INSUFFICIENT_CONTEXT:
+                if stats is not None:
+                    stats.relationship_pairs_insufficient_context += 1
+                if insufficient_context_counter is not None:
+                    insufficient_context_counter[0] += 1
+                continue
+
+            if stats is not None:
+                if cmp.match_method == "llm_fallback":
+                    stats.relationship_pairs_llm_fallback_matched += 1
+                elif cmp.match_method == "jaccard":
+                    stats.relationship_pairs_jaccard_matched += 1
+
             explanation = build_explanation(cmp, verdict, reason)
 
             rel = Relationship(

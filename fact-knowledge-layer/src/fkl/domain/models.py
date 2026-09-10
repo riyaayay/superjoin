@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,7 @@ class TableContext(BaseModel):
     """Structured evidence for a fact extracted from a table cell."""
 
     table_title: str | None = None
+    company_name: str | None = None
     row_header: str | None = None
     column_headers: list[str] = Field(default_factory=list)
     cell_value: str = ""
@@ -72,6 +73,7 @@ class FactCandidate(BaseModel):
     unit_raw: str | None = None
     period_raw: str | None = None
     scope: dict[str, Any] = Field(default_factory=dict)
+    role_status: str | None = None
     evidence_quote: str = ""  # used only for grounding validation
     confidence_hint: float = Field(default=0.5, ge=0.0, le=1.0)
 
@@ -122,6 +124,7 @@ class Fact(BaseModel):
     ingestion_run_id: str
     evidence_block_id: str
     entity_raw: str
+    entity_canonical: str | None = None
     metric_raw: str
     metric_key: str | None = None
     value_raw: str
@@ -135,6 +138,7 @@ class Fact(BaseModel):
     period_raw: str | None = None
     period_start: str | None = None
     period_end: str | None = None
+    role_status: str | None = None
     scope: dict[str, Any] = Field(default_factory=dict)
     qualifiers: dict[str, Any] = Field(default_factory=dict)
     extraction_method: ExtractionMethod
@@ -156,6 +160,7 @@ class ComparisonResult(BaseModel):
     right_fact_id: str
     metric_match: bool
     entity_match: bool
+    metric_equivalent: bool | None = None
     period_match: bool | None = None
     scope_match: bool | None = None
     left_normalised: float | None = None
@@ -170,6 +175,9 @@ class ComparisonResult(BaseModel):
     period_right: str | None = None
     evidence_quality_left: float = 0.0
     evidence_quality_right: float = 0.0
+    canonical_metric_label: str | None = None
+    metric_score: float = 0.0
+    match_method: Literal["jaccard", "llm_fallback", "none"] = "none"
 
 
 class Relationship(BaseModel):
@@ -187,6 +195,31 @@ class Relationship(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Extraction & coverage statistics
+# ---------------------------------------------------------------------------
+
+
+class ExtractionStats(BaseModel):
+    # Prose block coverage (Task 1 & 9)
+    prose_blocks_total: int = 0
+    prose_blocks_llm_called: int = 0
+    prose_blocks_skipped_due_to_cap: int = 0
+    sections_total: int = 0
+    sections_covered: int = 0
+
+    # Table cell coverage (Task 6 & 9)
+    table_cells_total: int = 0
+    table_cells_rejected_missing_header: int = 0
+    table_cells_rejected_not_numeric: int = 0
+
+    # Relationship matching coverage (Task 3 & 9)
+    relationship_pairs_total: int = 0
+    relationship_pairs_jaccard_matched: int = 0
+    relationship_pairs_llm_fallback_matched: int = 0
+    relationship_pairs_insufficient_context: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Ingestion summary
 # ---------------------------------------------------------------------------
 
@@ -199,3 +232,4 @@ class IngestionSummary(BaseModel):
     relationships_created: int
     warnings: list[str] = Field(default_factory=list)
     duration_seconds: float = 0.0
+    stats: ExtractionStats | None = None

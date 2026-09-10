@@ -10,6 +10,7 @@ const API = {
   },
   documents: () => API.json('/api/documents'),
   document: (id) => API.json(`/api/documents/${id}`),
+  deleteDocument: (id) => API.json(`/api/documents/${id}`, { method: 'DELETE' }),
   uploadDocument: (formData) => fetch('/api/documents', { method: 'POST', body: formData }).then(r => r.json()),
   facts: (params) => API.json('/api/facts?' + new URLSearchParams(params)),
   fact: (id) => API.json(`/api/facts/${id}`),
@@ -48,8 +49,9 @@ function verdictBadge(verdict) {
 }
 
 function statusBadge(status) {
-  const icons = { queued: '⏳', processing: '⚙', complete: '✓', failed: '✗' };
-  return `<span class="badge badge-${status}">${icons[status] || ''} ${status}</span>`;
+  const icons = { queued: '⏳', processing: '⚙', complete: '✓', failed: '✗', relationships_failed: '⚠' };
+  const labels = { relationships_failed: 'relationships failed' };
+  return `<span class="badge badge-${status}">${icons[status] || ''} ${labels[status] || status}</span>`;
 }
 
 function reviewBadge(state) {
@@ -225,18 +227,40 @@ function initIndexPage() {
         return;
       }
       docsGrid.innerHTML = docs.map(d => `
-        <a href="/documents/${d.document_id}" class="doc-card" data-doc-id="${d.document_id}">
-          <div class="flex items-center justify-between mb-8">
-            <span class="doc-status">${statusBadge(d.status)}</span>
-            <span class="text-muted" style="font-size:.72rem">${d.created_at?.slice(0,10) || ''}</span>
-          </div>
-          <h3>📄 ${esc(d.original_filename)}</h3>
-          <div class="doc-meta">
-            <span class="doc-stat">📑 ${d.page_count ?? '?'} pages</span>
-            <span class="doc-stat doc-stats">Loading…</span>
-          </div>
-          ${d.error_message ? `<div class="text-red mt-8" style="font-size:.75rem">⚠ ${esc(d.error_message)}</div>` : ''}
-        </a>`).join('');
+        <div class="doc-card-wrap" style="position:relative">
+          <a href="/documents/${d.document_id}" class="doc-card" data-doc-id="${d.document_id}">
+            <div class="flex items-center justify-between mb-8">
+              <span class="doc-status">${statusBadge(d.status)}</span>
+              <span class="text-muted" style="font-size:.72rem;margin-right:24px">${d.created_at?.slice(0,10) || ''}</span>
+            </div>
+            <h3>📄 ${esc(d.original_filename)}</h3>
+            <div class="doc-meta">
+              <span class="doc-stat">📑 ${d.page_count ?? '?'} pages</span>
+              <span class="doc-stat doc-stats">Loading…</span>
+            </div>
+            ${d.error_message ? `<div class="text-red mt-8" style="font-size:.75rem">⚠ ${esc(d.error_message)}</div>` : ''}
+          </a>
+          <button class="btn-card-delete" title="Delete document" data-delete-id="${d.document_id}" data-filename="${esc(d.original_filename)}" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-muted,#888);cursor:pointer;font-size:14px;padding:4px;border-radius:4px;line-height:1;transition:color 0.2s;">🗑</button>
+        </div>`).join('');
+
+      docsGrid.querySelectorAll('.btn-card-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const docId = btn.dataset.deleteId;
+          const fname = btn.dataset.filename || docId;
+          if (!confirm(`Are you sure you want to delete "${fname}" and all its extracted facts?`)) return;
+          try {
+            await API.deleteDocument(docId);
+            toast(`Deleted ${fname}`, 'success');
+            loadDocuments();
+            if (typeof loadFacts === 'function') loadFacts();
+            if (typeof loadRelationships === 'function') loadRelationships();
+          } catch (err) {
+            toast(err.message || 'Failed to delete', 'error');
+          }
+        });
+      });
 
       // Load stats for each doc
       for (const d of docs) {
@@ -428,6 +452,7 @@ function initDocumentPage(documentId) {
       if (statusEl) statusEl.innerHTML = statusBadge(doc.status);
       if (pageCountEl) pageCountEl.textContent = doc.page_count ?? '?';
       if (statsEl) statsEl.innerHTML = `
+        ${doc.canonical_entity ? `<span class="badge" style="background:var(--accent-dim);color:var(--accent)">🏛 ${esc(doc.canonical_entity)}</span>` : ''}
         <span>✓ ${doc.stats?.facts_accepted ?? 0} accepted facts</span>
         <span>✗ ${doc.stats?.facts_rejected_candidates ?? 0} rejected</span>
         <span>🔗 ${doc.stats?.relationships ?? 0} relationships</span>`;
@@ -441,7 +466,9 @@ function initDocumentPage(documentId) {
               <span class="kv-key">Facts created</span><span class="kv-val text-green">${r.facts_created}</span>
               <span class="kv-key">Facts rejected</span><span class="kv-val text-amber">${r.facts_rejected}</span>
               <span class="kv-key">Relationships</span><span class="kv-val text-accent">${r.relationships_created}</span>
+              ${r.blocks_skipped_due_to_cap ? `<span class="kv-key">Prose blocks skipped</span><span class="kv-val text-amber">${r.blocks_skipped_due_to_cap} (cap: 40)</span>` : ''}
             </div>
+            ${r.blocks_skipped_due_to_cap ? `<div class="mt-8 text-amber" style="font-size:.8rem">⚠ Note: Prose extraction was capped at 40 blocks; ${r.blocks_skipped_due_to_cap} blocks were skipped.</div>` : ''}
           </div>`).join('');
       }
       if (doc.error_message && errorEl) {

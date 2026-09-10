@@ -81,3 +81,16 @@ class TestFakeLLMProvider:
         for cand in result:
             # Fake provider uses first number from text
             assert cand.value_raw in text or cand.evidence_quote in text
+
+    def test_governance_fact_extraction(self):
+        """Governance disclosure paragraphs should produce at least one FactCandidate."""
+        text = "Mr. Rajesh Sharma resigned as Independent Director from the Board of Directors effective 31st March 2024."
+        result = self.provider.extract_facts(
+            block=_block(text),
+            document_context="Corporate Governance Disclosures",
+        )
+        assert len(result) >= 1
+        cand = result[0]
+        assert "Rajesh Sharma" in cand.entity_raw
+        assert "resigned" in cand.value_raw.lower() or "resigned" in cand.metric_raw.lower()
+        assert cand.evidence_quote in text

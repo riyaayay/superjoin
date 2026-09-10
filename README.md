@@ -5,7 +5,7 @@
 [![PyMuPDF](https://img.shields.io/badge/PyMuPDF-1.24+-red.svg)](https://pymupdf.readthedocs.io/)
 [![Gemini 3.5 Flash Lite](https://img.shields.io/badge/LLM-Gemini%203.5%20Flash%20Lite-4285F4.svg?logo=google&logoColor=white)](https://aistudio.google.com/)
 [![SQLite](https://img.shields.io/badge/Storage-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Tests Passing](https://img.shields.io/badge/Tests-73%2F73%20Passing-brightgreen.svg)](#running-tests)
+[![Tests Passing](https://img.shields.io/badge/Tests-87%2F87%20Passing-brightgreen.svg)](#running-tests)
 
 > **Evidence-first fact extraction, normalisation, and relationship discovery for financial and economic PDF documents.**
 
@@ -179,6 +179,16 @@ Before any candidate number becomes an immutable `Fact`:
 - Uploading an existing file triggers an instant cache hit via SHA-256 checksum comparison.
 - When new documents are ingested, fact pair comparisons are strictly bounded to $(Facts_{new} \times Facts_{existing})$. Prior pairs are never re-evaluated.
 
+### 5. Architectural Generalization & Diagnosed Fixes (Fixes 1–7)
+To ensure robust generalization over diverse corporate filings (e.g. Reliance, Tata Motors) and economic reports:
+- **Fix 1 (Canonical Entity Resolution)**: Resolves document-level corporate identity (`resolve_canonical_entity`) and strictly prevents table captions (e.g. *"Consolidated Statement of Profit and Loss"*) from masquerading as entities.
+- **Fix 2 (2D Disjoint Blocking Gate)**: Evaluates entity overlap ($\ge 0.25$) and metric overlap ($\ge 0.35$) independently, eliminating false matches between unrelated companies or distinct line items.
+- **Fix 3 (Mandatory Metric Equivalence Gate)**: Mandates positive metric equivalence (`metric_equivalent is True`) before allowing `CORROBORATES` or `LIKELY_CONFLICT`, demoting non-equivalent comparisons to `INSUFFICIENT_CONTEXT`.
+- **Fix 4 (Confidence Thresholds to Review States)**: Automatically flags facts with grounding confidence $< 0.65$ as `NEEDS_REVIEW` rather than `ACCEPTED`.
+- **Fix 5 (Semantic Qualitative Extraction)**: Extracts corporate appointments, resignations, and governance events as `ValueKind.TEXT` with full verbatim grounding.
+- **Fix 6 (Period Parsing & Parenthesis Balancing)**: Automatically balances truncated table headers (e.g. `(Audited`) and parses dates like `Year ended 31.03.2023`.
+- **Fix 7 (Prose Extraction Transparency)**: Tracks and displays `blocks_skipped_due_to_cap` directly on the document dashboard whenever prose extraction is capped.
+
 ---
 
 ## 🌐 API Overview
@@ -187,7 +197,7 @@ Before any candidate number becomes an immutable `Fact`:
 | :--- | :--- | :--- |
 | `POST` | `/api/documents` | Upload a PDF document for asynchronous ingestion |
 | `GET` | `/api/documents` | List all ingested documents and their status |
-| `GET` | `/api/documents/{id}` | Ingestion status, page count, and fact counts |
+| `GET` | `/api/documents/{id}` | Ingestion status, page count, canonical entity, and run stats |
 | `GET` | `/api/facts` | Query extracted facts with filtering by metric, period, or entity |
 | `GET` | `/api/facts/{id}` | Detailed fact view including verbatim source block coordinates |
 | `GET` | `/api/relationships` | Query classified relationships (`corroborates`, `reconciles`, `likely_conflict`) |
@@ -200,6 +210,7 @@ Before any candidate number becomes an immutable `Fact`:
 ```
 superjoin/
 ├── README.md                                  # Repository overview and guide (this file)
+├── ARCHITECTURE_AND_PIPELINE.md               # Deep technical specification & model prompt analysis
 ├── package.json                               # Root workspace orchestration scripts
 ├── superjoin-implementation-blueprint.md      # Implementation blueprint and requirements
 ├── starter-datasets/                          # Evaluation datasets
@@ -221,7 +232,7 @@ superjoin/
     │   ├── pipeline/                          # PDF parsing, table extraction, grounding, relationships
     │   ├── providers/                         # Gemini 3.5 Flash Lite provider and offline fallback
     │   └── web/                               # Web UI templates & static assets
-    └── tests/                                 # Unit, integration, and contract tests (73 passing)
+    └── tests/                                 # Unit, integration, and contract tests (87 passing)
 ```
 
 ---

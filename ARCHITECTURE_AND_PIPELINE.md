@@ -404,6 +404,7 @@ CREATE TABLE documents (
   page_count INTEGER,
   status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, complete, failed
   error_message TEXT,
+  canonical_entity TEXT,                  -- Fix 1: Document-level resolved entity
   created_at TEXT NOT NULL
 );
 
@@ -416,7 +417,9 @@ CREATE TABLE ingestion_runs (
   finished_at TEXT,
   facts_created INTEGER NOT NULL DEFAULT 0,
   facts_rejected INTEGER NOT NULL DEFAULT 0,
-  relationships_created INTEGER NOT NULL DEFAULT 0
+  relationships_created INTEGER NOT NULL DEFAULT 0,
+  insufficient_context_count INTEGER NOT NULL DEFAULT 0, -- Fix 2 & 7: Filtered pairs count
+  blocks_skipped_due_to_cap INTEGER NOT NULL DEFAULT 0   -- Fix 7: Disclosed prose cap skips
 );
 
 CREATE TABLE source_blocks (
@@ -437,6 +440,7 @@ CREATE TABLE facts (
   ingestion_run_id TEXT NOT NULL REFERENCES ingestion_runs(id),
   evidence_block_id TEXT NOT NULL REFERENCES source_blocks(id),
   entity_raw TEXT NOT NULL,
+  entity_canonical TEXT,                 -- Fix 1: Canonical company/institution name
   metric_raw TEXT NOT NULL,
   metric_key TEXT NOT NULL,
   value_raw TEXT NOT NULL,
@@ -451,7 +455,7 @@ CREATE TABLE facts (
   period_end TEXT,
   scope_json TEXT NOT NULL DEFAULT '{}',
   confidence REAL NOT NULL,
-  review_state TEXT NOT NULL DEFAULT 'accepted',
+  review_state TEXT NOT NULL DEFAULT 'accepted', -- Fix 4: 'accepted' (>=0.65) or 'needs_review' (<0.65)
   normalisation_provenance_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL
 );
@@ -495,3 +499,43 @@ CREATE TABLE relationships (
 | **SQLite with Strict Schema** | Single-file zero-config portability; easily inspectable with standard SQL tools. | Not suited for horizontal write scaling across distributed workers. | Ingestion runs execute incrementally in background tasks with connection pooling. |
 | **Precision-Derived Tolerances** | Grounds tolerances in significant digits of the source document ($0.5 / 10^D$). | Relies on accurate string preservation of original decimal points. | Grounding gate verifies raw text representations before normalisation. |
 | **Strict Grounding Gate** | Completely eliminates hallucinations by requiring exact substring presence in source blocks. | Drops legitimate paraphrased facts if the LLM changes phrasing. | Prompt explicitly instructs the model to extract verbatim strings only. |
+
+---
+
+## 7. Architecture Hardening & Diagnosed Fixes (Fixes 1 – 7)
+
+Following deep evaluation across complex Indian corporate filings and macroeconomic reports, 7 root-caused architectural fixes were systematically integrated:
+
+### Fix 1 — Canonical Document-Level Entity Resolution
+- **Problem**: Table captions (e.g. *"Consolidated Statement of Profit and Loss (Extract)"*) were being erroneously assigned as `entity_raw`, corrupting downstream entity matching.
+- **Solution**: Implemented `resolve_canonical_entity(mupdf_doc)` in `parse_pdf.py`. It inspects document metadata and the topmost prominent spans on Page 1, prioritizing corporate suffixes (`Limited`, `Ltd`, `Corp`, `Bank`, etc.) and stripping administrative codes (e.g. CIN numbers).
+- **Enforcement**: In `ingest_document.py` (`_make_fact`) and `extract_table_facts.py`, table titles and generic tokens (*"the company"*, *"the group"*) are strictly overridden by `canonical_entity`.
+
+### Fix 2 — 2D Independent Blocking Gate
+- **Problem**: A combined entity-plus-metric token union allowed entity-mismatched or metric-mismatched pairs to slip through if one side had high token count.
+- **Solution**: `build_relationships.py` decouples candidate comparison into an independent 2D Cartesian gate:
+  $$\text{Jaccard}(Entity_A, Entity_B) \ge 0.25 \quad \land \quad \text{Jaccard}(Metric_A, Metric_B) \ge 0.35$$
+- Non-comparable pairs are safely omitted from database relationship bloat and counted towards `insufficient_context_count`.
+
+### Fix 3 — Mandatory Metric Equivalence Gate
+- **Problem**: Incidental string overlap could falsely trigger `CORROBORATES` or `LIKELY_CONFLICT` even when metrics differed fundamentally (e.g. *"Total Revenue"* vs *"Employee Benefits Expense"*).
+- **Solution**: `classification.py` enforces a mandatory gate (`cmp.metric_equivalent is True`). If `metric_equivalent is False`, verdicts are demoted to `INSUFFICIENT_CONTEXT` (`reason_code = INSUFFICIENT_CONTEXT`), preventing false contradictions and false corroborations.
+
+### Fix 4 — Grounding Confidence to Review States
+- **Problem**: Facts with low extraction or grounding confidence were marked as `ACCEPTED`, providing unwarranted certainty to human reviewers.
+- **Solution**: Implemented strict grounding confidence boundaries in `_make_fact`:
+  $$\text{review\_state} = \begin{cases} \text{ACCEPTED} & \text{if } \text{confidence} \ge 0.65 \\ \text{NEEDS\_REVIEW} & \text{if } \text{confidence} < 0.65 \end{cases}$$
+- The UI surfaces amber *"Needs Review"* badges for quick human inspection.
+
+### Fix 5 — Qualitative & Semantic Fact Extraction
+- **Problem**: Prompts and parsers were hyper-specialized solely for numbers, dropping valuable corporate events like auditor opinions, director appointments, and resignations.
+- **Solution**: Expanded system prompts in `gemini_provider.py` and `fake_llm.py` to extract qualitative corporate milestones and governance facts into `ValueKind.TEXT` with full verbatim quote verification.
+
+### Fix 6 — Parenthesis Balancing & Period Token Preservation
+- **Problem**: Truncated cell strings in column headers (e.g. *"Year ended 31.03.2023 (Audited"*) resulted in broken period tags and invalid dates.
+- **Solution**: Added `_balance_parens()` utility in `parse_pdf.py` and updated regex parsers in `normalisation.py` to support `_YEAR_ENDED`, `_QUARTER_ENDED`, and DMY date formats while cleanly preserving parenthesised tokens.
+
+### Fix 7 — Disclosed Prose Extraction Capping
+- **Problem**: When processing extensive 100+ page documents, unconstrained LLM calls on prose paragraphs triggered rate limits and latency spikes. Capping at 40 blocks was silent and non-transparent.
+- **Solution**: The ingestion orchestrator tracks `blocks_skipped_due_to_cap` and persists it directly in `ingestion_runs`. The API and reviewer UI explicitly display:
+  `"⚠ Note: Prose extraction was capped at 40 blocks; X blocks were skipped."`

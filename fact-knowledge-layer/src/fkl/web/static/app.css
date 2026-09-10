@@ -279,6 +279,7 @@ body {
 .badge-queued { background: rgba(77,98,128,0.2); color: var(--text-secondary); }
 .badge-processing { background: var(--accent-dim); color: var(--accent); animation: pulse-blue 1.5s infinite; }
 .badge-complete { background: var(--green-dim); color: var(--green); }
+.badge-relationships_failed { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
 .badge-failed { background: var(--red-dim); color: var(--red); }
 .badge-accepted { background: var(--green-dim); color: var(--green); }
 .badge-rejected { background: var(--red-dim); color: var(--red); }

@@ -97,6 +97,7 @@ def list_documents(db: Session = Depends(get_db)):
             "original_filename": d.original_filename,
             "status": d.status,
             "page_count": d.page_count,
+            "canonical_entity": d.canonical_entity,
             "created_at": d.created_at,
             "completed_at": d.completed_at,
             "error_message": d.error_message,
@@ -119,6 +120,18 @@ def get_document(document_id: str, db: Session = Depends(get_db)):
             "facts_created": r.facts_created,
             "facts_rejected": r.facts_rejected,
             "relationships_created": r.relationships_created,
+            "insufficient_context_count": getattr(r, "insufficient_context_count", 0),
+            "blocks_skipped_due_to_cap": getattr(r, "blocks_skipped_due_to_cap", 0),
+            "prose_blocks_total": getattr(r, "prose_blocks_total", 0),
+            "prose_blocks_llm_called": getattr(r, "prose_blocks_llm_called", 0),
+            "table_cells_total": getattr(r, "table_cells_total", 0),
+            "table_cells_rejected_missing_header": getattr(r, "table_cells_rejected_missing_header", 0),
+            "table_cells_rejected_not_numeric": getattr(r, "table_cells_rejected_not_numeric", 0),
+            "relationship_pairs_total": getattr(r, "relationship_pairs_total", 0),
+            "relationship_pairs_jaccard_matched": getattr(r, "relationship_pairs_jaccard_matched", 0),
+            "relationship_pairs_llm_fallback_matched": getattr(r, "relationship_pairs_llm_fallback_matched", 0),
+            "relationship_pairs_insufficient_context": getattr(r, "relationship_pairs_insufficient_context", 0),
+            "relationships_error": getattr(r, "relationships_error", None),
         }
         for r in doc.runs
     ]
@@ -127,12 +140,21 @@ def get_document(document_id: str, db: Session = Depends(get_db)):
         "original_filename": doc.original_filename,
         "status": doc.status,
         "page_count": doc.page_count,
+        "canonical_entity": doc.canonical_entity,
         "created_at": doc.created_at,
         "completed_at": doc.completed_at,
         "error_message": doc.error_message,
         "stats": stats,
         "runs": runs,
     }
+
+
+@router.delete("/{document_id}")
+def delete_document(document_id: str, db: Session = Depends(get_db)):
+    deleted = repositories.delete_document(db, document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"status": "ok", "deleted": True, "document_id": document_id}
 
 
 @router.get("/{document_id}/pages/{page_index}")
