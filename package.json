@@ -4,10 +4,12 @@
   "private": true,
   "description": "Superjoin fact knowledge layer workspace",
   "scripts": {
+    "build": "npm --prefix fact-knowledge-layer run build",
     "dev": "npm --prefix fact-knowledge-layer run dev",
     "start": "npm --prefix fact-knowledge-layer run start",
     "test": "npm --prefix fact-knowledge-layer run test",
     "seed": "npm --prefix fact-knowledge-layer run seed",
+    "prepare-demo": "npm --prefix fact-knowledge-layer run prepare-demo",
     "audit": "npm --prefix fact-knowledge-layer run audit"
   }
 }

@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "description": "Fact Knowledge Layer — evidence-first financial fact extraction and relationship discovery",
   "scripts": {
+    "build": "python -c \"import sys; sys.path.insert(0, 'src'); import fkl; print('Build verification passed: fkl package valid')\"",
     "dev": "python -c \"import sys; sys.path.insert(0, 'src'); import uvicorn; uvicorn.run('fkl.main:app', host='127.0.0.1', port=8000, reload=True)\"",
     "start": "python -c \"import sys; sys.path.insert(0, 'src'); import uvicorn; uvicorn.run('fkl.main:app', host='127.0.0.1', port=8000)\"",
     "test": "python -m pytest tests/ -v",
     "seed": "python scripts/seed_demo.py",
+    "prepare-demo": "python scripts/prepare_demo.py",
     "audit": "python scripts/audit_demo_cases.py"
   }
 }
