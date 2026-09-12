@@ -85,6 +85,7 @@ def _run_migrations(engine) -> None:
                         "relationship_pairs_jaccard_matched",
                         "relationship_pairs_llm_fallback_matched",
                         "relationship_pairs_insufficient_context",
+                        "metric_llm_calls_skipped_due_to_cap",
                     ]
                     for col in coverage_cols:
                         if col not in cols:

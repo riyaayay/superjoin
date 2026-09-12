@@ -20,6 +20,7 @@ const API = {
   reviewRelationship: (id, state, note) => API.json(`/api/relationships/${id}/review`, {
     method: 'POST', body: JSON.stringify({ review_state: state, note })
   }),
+  stats: () => API.json('/api/stats'),
 };
 
 // ── Toast ─────────────────────────────────────────────────
@@ -81,8 +82,46 @@ function pollUntilDone(docId, onUpdate, intervalMs = 2000) {
   poll();
 }
 
-// ── Evidence panel ────────────────────────────────────────
-function renderEvidence(evidence) {
+// ── Inline evidence renderer ──────────────────────────────
+// Used both in the accordion rows (relationships panel) and in the fact detail page.
+// valueToHighlight: the raw value string to <mark> inside prose text.
+function renderEvidenceInline(evidence, docId, valueToHighlight) {
+  if (!evidence) return '<p class="text-muted" style="font-size:.78rem;margin-top:8px">No evidence data</p>';
+  const tc = evidence.table_context;
+  let textHtml = '';
+  if (tc) {
+    const rows = [
+      tc.table_title && `<tr><td class="kv-key">Table</td><td class="kv-val">${esc(tc.table_title)}</td></tr>`,
+      tc.row_header && `<tr><td class="kv-key">Row</td><td class="kv-val">${esc(tc.row_header)}</td></tr>`,
+      tc.column_headers?.length && `<tr><td class="kv-key">Column</td><td class="kv-val">${esc(tc.column_headers.join(' | '))}</td></tr>`,
+      tc.cell_value && `<tr><td class="kv-key">Cell value</td><td class="kv-val mono text-cyan">${esc(tc.cell_value)}</td></tr>`,
+      tc.unit_note && `<tr><td class="kv-key">Unit note</td><td class="kv-val">${esc(tc.unit_note)}</td></tr>`,
+    ].filter(Boolean);
+    textHtml = `<table class="kv-list" style="width:100%;margin-top:8px">${rows.join('')}</table>`;
+  } else if (evidence.text) {
+    const highlighted = highlightValue(evidence.text, valueToHighlight);
+    textHtml = `<div class="evidence-quote evidence-quote--compact">${highlighted}</div>`;
+  }
+
+  const pageLabel = evidence.printed_page_label
+    ? `p.${evidence.printed_page_label}`
+    : `page ${evidence.pdf_page_index}`;
+
+  const docShort = docId ? docId.slice(-8) : '—';
+
+  return `
+    <div class="inline-evidence">
+      <div class="inline-evidence-header">
+        <span class="badge" style="font-size:.65rem">${esc(evidence.block_kind || '')}</span>
+        <span class="text-muted" style="font-size:.72rem">📄 ${pageLabel} · doc …${docShort}</span>
+        ${evidence.pdf_page_index != null ? `<a class="page-render-link" style="font-size:.72rem" href="/api/documents/${docId}/pages/${evidence.pdf_page_index}" target="_blank">View page →</a>` : ''}
+      </div>
+      ${textHtml}
+    </div>`;
+}
+
+// ── Evidence panel (full, used on fact detail page) ───────
+function renderEvidence(evidence, valueToHighlight) {
   if (!evidence) return '<p class="text-muted">No evidence data</p>';
   const tc = evidence.table_context;
   let textHtml = '';
@@ -96,12 +135,14 @@ function renderEvidence(evidence) {
     ].filter(Boolean);
     textHtml = `<table class="kv-list" style="width:100%">${rows.join('')}</table>`;
   } else {
-    textHtml = `<div class="evidence-quote">${esc(evidence.text || '')}</div>`;
+    // Task 3: highlight the grounded value inside prose text
+    const highlighted = highlightValue(evidence.text || '', valueToHighlight);
+    textHtml = `<div class="evidence-quote">${highlighted}</div>`;
   }
 
   return `
     <div class="evidence-panel">
-      <h3>📄 Source Evidence — Page ${evidence.pdf_page_index} 
+      <h3>📄 Source Evidence — Page ${evidence.pdf_page_index}
         <span class="badge">${evidence.block_kind || ''}</span>
         ${evidence.printed_page_label ? `<span class="text-muted">(printed: ${evidence.printed_page_label})</span>` : ''}
       </h3>
@@ -114,6 +155,36 @@ function renderEvidence(evidence) {
         🔍 View source page →
       </a>
     </div>`;
+}
+
+// ── Task 3: highlight exact value match in source text ────
+// Returns escaped HTML string with <mark> around matched substring.
+function highlightValue(rawText, valueToHighlight) {
+  const escaped = esc(rawText);
+  if (!valueToHighlight) return escaped;
+
+  // Try exact substring match first (after escaping both for safety)
+  const escapedVal = esc(valueToHighlight);
+  const idx = escaped.indexOf(escapedVal);
+  if (idx !== -1) {
+    return escaped.slice(0, idx)
+      + '<mark class="evidence-highlight">' + escapedVal + '</mark>'
+      + escaped.slice(idx + escapedVal.length);
+  }
+
+  // Fallback: strip commas/currency symbols and try again on the raw text
+  const stripped = valueToHighlight.replace(/[,₹$€£\s]/g, '');
+  if (stripped && stripped !== valueToHighlight) {
+    const rawIdx = rawText.indexOf(stripped);
+    if (rawIdx !== -1) {
+      const pre = esc(rawText.slice(0, rawIdx));
+      const match = esc(rawText.slice(rawIdx, rawIdx + stripped.length));
+      const post = esc(rawText.slice(rawIdx + stripped.length));
+      return pre + '<mark class="evidence-highlight">' + match + '</mark>' + post;
+    }
+  }
+
+  return escaped; // no match — return plain escaped text
 }
 
 function renderNormTrace(steps) {
@@ -133,6 +204,46 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Verdict connector symbol ───────────────────────────────
+function verdictSymbol(verdict) {
+  return { corroborates: '≈', reconciles: '⟺', likely_conflict: '⚡', insufficient_context: '?' }[verdict] || '·';
+}
+
+// ── Reason code human descriptions (Task 2) ───────────────
+const REASON_DESCRIPTIONS = {
+  exact_match: 'The values are numerically identical after normalisation.',
+  rounded_match: 'One value is a rounded version of the other — a common presentation difference.',
+  alias_match: 'The entities or metric names differ slightly (e.g. abbreviation vs. full name) but refer to the same concept.',
+  different_period: 'The facts cover different reporting periods (e.g. FY2023 vs. H1 FY2024).',
+  different_scope: 'The facts cover different scopes (e.g. standalone vs. consolidated entity).',
+  unit_or_scale_difference: 'The values appear to differ due to unit or scale (e.g. crores vs. lakhs).',
+  methodology_difference: 'The values reflect different accounting or reporting methodologies.',
+  material_value_difference: 'The values are materially different and cannot be explained by rounding, period, or scope alone.',
+  low_evidence_quality: 'The source block had low-quality or ambiguous text that could not be reliably interpreted.',
+  insufficient_context: 'There was not enough context to determine whether the values agree or conflict.',
+};
+
+const REJECTION_DESCRIPTIONS = {
+  // Actual codes present in the DB
+  meta_disclaimer_not_a_fact: 'The text is boilerplate or disclaimer language (e.g. "this is a synthetic document") rather than a reportable fact.',
+  suspected_text_corruption: 'The extracted text looked scrambled or garbled — e.g. column headers interleaved with cell text — so it was not trusted rather than guessed at.',
+  metric_label_not_grounded: 'The extracted metric label could not be found verbatim in the source block text, so the candidate was rejected to avoid mis-attribution.',
+  value_not_found_in_block_text: 'The numeric value could not be located in the source block, failing the verbatim grounding check.',
+  cell_value_not_recognized_as_numeric: 'The cell contained text rather than a number or date — only quantitative facts are ingested.',
+  source_block_is_chart_or_image: 'The source block is a chart or embedded image; text extraction from images is not supported in this version.',
+  // Generic fallbacks
+  missing_row_header: 'The table cell had no row label, so there was no way to identify what metric it represents.',
+  not_numeric: 'The extracted value was not a number or date — only quantitative facts are ingested.',
+  below_confidence_threshold: 'The extraction confidence was too low to accept the candidate reliably.',
+  duplicate: 'An identical fact (same entity, metric, value, period) was already accepted from another source.',
+  failed_grounding: 'The candidate value could not be found verbatim in the source block text.',
+  entity_heading_leak: 'The extracted entity was a section heading rather than a real corporate entity.',
+};
+
+function rejectionDesc(code) {
+  return REJECTION_DESCRIPTIONS[code] || REASON_DESCRIPTIONS[code] || 'See reason code for details.';
+}
+
 // ── Index page logic ──────────────────────────────────────
 function initIndexPage() {
   const uploadZone = document.getElementById('upload-zone');
@@ -141,13 +252,12 @@ function initIndexPage() {
   const selectedFile = document.getElementById('selected-file');
   const uploadStatus = document.getElementById('upload-status');
   const docsGrid = document.getElementById('docs-grid');
-  const factsSection = document.getElementById('facts-section');
-  const relsSection = document.getElementById('rels-section');
 
-  let currentFiles = [];  // multi-file: array of File objects
+  let currentFiles = [];
   let activePolls = new Set();
+  let activeRelVerdict = '';  // currently selected chip filter
 
-  // Drag & drop (support multiple files)
+  // Drag & drop
   uploadZone?.addEventListener('click', () => fileInput?.click());
   uploadZone?.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
   uploadZone?.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
@@ -164,9 +274,10 @@ function initIndexPage() {
   function handleFilesSelect(files) {
     currentFiles = files;
     if (selectedFile) {
-      selectedFile.textContent = files.length === 1
-        ? `Selected: ${files[0].name} (${(files[0].size / 1024 / 1024).toFixed(2)} MB)`
-        : `Selected: ${files.length} files (${files.map(f => f.name).join(', ')})`;
+      const names = files.length === 1
+        ? `${files[0].name}  (${(files[0].size/1024/1024).toFixed(1)} MB)`
+        : `${files.length} files selected`;
+      selectedFile.innerHTML = `<div class="selected-file-pill"><span>📎</span><span class="pill-name">${esc(names)}</span></div>`;
     }
     if (uploadBtn) uploadBtn.disabled = false;
   }
@@ -204,7 +315,7 @@ function initIndexPage() {
     }
 
     currentFiles = [];
-    if (selectedFile) selectedFile.textContent = '';
+    if (selectedFile) selectedFile.innerHTML = '';
     if (fileInput) fileInput.value = '';
     uploadBtn.disabled = true;
     uploadBtn.innerHTML = '⬆ Upload PDF';
@@ -219,6 +330,7 @@ function initIndexPage() {
         activePolls.delete(docId);
         loadFacts();
         loadRelationships();
+        loadStats();
       }
     });
   }
@@ -271,15 +383,15 @@ function initIndexPage() {
             await API.deleteDocument(docId);
             toast(`Deleted ${fname}`, 'success');
             loadDocuments();
-            if (typeof loadFacts === 'function') loadFacts();
-            if (typeof loadRelationships === 'function') loadRelationships();
+            loadFacts();
+            loadRelationships();
+            loadStats();
           } catch (err) {
             toast(err.message || 'Failed to delete', 'error');
           }
         });
       });
 
-      // Load stats for each doc
       for (const d of docs) {
         try {
           const full = await API.document(d.document_id);
@@ -298,11 +410,27 @@ function initIndexPage() {
     }
   }
 
-  // Facts tab
+  // ── Task 4: Global stats strip ────────────────────────────
+  async function loadStats() {
+    try {
+      const s = await API.stats();
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; };
+      set('stat-docs', s.total_documents);
+      set('stat-facts', s.total_facts);
+      set('stat-rels', s.total_relationships);
+      set('stat-corr', s.verdicts?.corroborates ?? 0);
+      set('stat-rec', s.verdicts?.reconciles ?? 0);
+      set('stat-conf', s.verdicts?.likely_conflict ?? 0);
+      set('stat-ins', s.verdicts?.insufficient_context ?? 0);
+    } catch (e) {
+      console.warn('Stats load failed', e);
+    }
+  }
+
+  // ── Facts tab ─────────────────────────────────────────────
   let factsPage = 1;
   let factsFilters = {};
   async function loadFacts() {
-    if (!factsSection) return;
     const tbody = document.getElementById('facts-tbody');
     const totalEl = document.getElementById('facts-total');
     if (!tbody) return;
@@ -330,57 +458,126 @@ function initIndexPage() {
     }
   }
 
-  // Relationships tab
+  // ── Task 1: Relationships tab with accordion rows ─────────
   async function loadRelationships() {
-    const grid = document.getElementById('rels-grid');
-    if (!grid) return;
-    grid.innerHTML = '<div class="spinner" style="margin:40px auto;display:block"></div>';
+    const list = document.getElementById('rels-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:40px;text-align:center"><span class="spinner"></span></div>';
     try {
-      const verdictFilter = document.getElementById('verdict-filter')?.value || '';
-      const res = await API.relationships({ limit: 50, ...(verdictFilter ? { verdict: verdictFilter } : {}) });
+      const params = { limit: 100 };
+      if (activeRelVerdict) params.verdict = activeRelVerdict;
+      const res = await API.relationships(params);
+
       if (!res.items.length) {
-        grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🔗</div><p>No relationships yet. Upload multiple documents.</p></div>';
+        const emptyMsg = activeRelVerdict
+          ? `No ${activeRelVerdict.replace(/_/g, ' ')} relationships found in the current knowledge layer.`
+          : 'No relationships yet. Upload multiple documents to discover cross-document facts.';
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔗</div><p>${esc(emptyMsg)}</p></div>`;
         return;
       }
-      grid.innerHTML = res.items.map(r => `
-        <div class="rel-card rel-card--${r.verdict}">
-          <div class="card-header">
-            ${verdictBadge(r.verdict)}
-            <div class="flex items-center gap-8">
-              <span class="badge" style="font-size:.68rem">
-                ${esc(r.reason_code?.replace(/_/g,' '))}
-              </span>
-              ${reviewBadge(r.review_state)}
+
+      list.innerHTML = res.items.map((r, i) => {
+        const lf = r.left_fact;
+        const rf = r.right_fact;
+        const sym = verdictSymbol(r.verdict);
+        const rcLabel = r.reason_code ? r.reason_code.replace(/_/g, ' ') : '';
+        const rcDesc = REASON_DESCRIPTIONS[r.reason_code] || '';
+        const rowId = `rel-row-${r.relationship_id}`;
+        const bodyId = `rel-body-${r.relationship_id}`;
+
+        return `
+          <div class="rel-accordion rel-accordion--${r.verdict}" id="${rowId}">
+            <!-- Accordion header: summary row -->
+            <button class="rel-accordion-header" onclick="toggleRelAccordion('${bodyId}', this)" aria-expanded="false">
+              <div class="rel-accordion-left">
+                ${verdictBadge(r.verdict)}
+                ${r.reason_code ? `<span class="reason-chip">${esc(rcLabel)}</span>` : ''}
+              </div>
+              <div class="rel-accordion-facts">
+                <span class="rel-accordion-entity">${esc(lf?.entity_raw || '—')}</span>
+                <span class="rel-accordion-metric">${esc(lf?.metric_raw || '—')}</span>
+                <span class="rel-accordion-value">${esc(lf?.value_raw || '—')}</span>
+                <span class="rel-connector-sym">${sym}</span>
+                <span class="rel-accordion-entity">${esc(rf?.entity_raw || '—')}</span>
+                <span class="rel-accordion-metric">${esc(rf?.metric_raw || '—')}</span>
+                <span class="rel-accordion-value">${esc(rf?.value_raw || '—')}</span>
+              </div>
+              <div class="rel-accordion-right">
+                ${reviewBadge(r.review_state)}
+                <span class="accordion-chevron">▸</span>
+              </div>
+            </button>
+
+            <!-- Accordion body: full inline evidence -->
+            <div class="rel-accordion-body hidden" id="${bodyId}">
+              <!-- Two-column fact evidence -->
+              <div class="rel-evidence-grid">
+                <div class="rel-evidence-col">
+                  <div class="rel-evidence-label">Source A</div>
+                  <div class="rel-fact-summary">
+                    <div class="entity">${esc(lf?.entity_raw || '—')}</div>
+                    <div class="metric">${esc(lf?.metric_raw || '—')}</div>
+                    <div class="value">${esc(lf?.value_raw || '—')}</div>
+                    ${lf?.unit_raw ? `<div class="text-muted" style="font-size:.72rem">${esc(lf.unit_raw)}</div>` : ''}
+                    ${lf?.period_raw ? `<div class="text-muted" style="font-size:.72rem">${esc(lf.period_raw)}</div>` : ''}
+                    ${lf?.extraction_method ? `<span class="badge" style="font-size:.62rem;margin-top:4px">${esc(lf.extraction_method.replace('_',' '))}</span>` : ''}
+                    ${lf ? `<a href="/facts/${lf.fact_id}" class="fact-link">Inspect fact →</a>` : ''}
+                  </div>
+                  ${renderEvidenceInline(lf?.evidence, lf?.document_id, lf?.value_raw)}
+                </div>
+                <div class="rel-evidence-divider">${sym}</div>
+                <div class="rel-evidence-col">
+                  <div class="rel-evidence-label">Source B</div>
+                  <div class="rel-fact-summary">
+                    <div class="entity">${esc(rf?.entity_raw || '—')}</div>
+                    <div class="metric">${esc(rf?.metric_raw || '—')}</div>
+                    <div class="value">${esc(rf?.value_raw || '—')}</div>
+                    ${rf?.unit_raw ? `<div class="text-muted" style="font-size:.72rem">${esc(rf.unit_raw)}</div>` : ''}
+                    ${rf?.period_raw ? `<div class="text-muted" style="font-size:.72rem">${esc(rf.period_raw)}</div>` : ''}
+                    ${rf?.extraction_method ? `<span class="badge" style="font-size:.62rem;margin-top:4px">${esc(rf.extraction_method.replace('_',' '))}</span>` : ''}
+                    ${rf ? `<a href="/facts/${rf.fact_id}" class="fact-link">Inspect fact →</a>` : ''}
+                  </div>
+                  ${renderEvidenceInline(rf?.evidence, rf?.document_id, rf?.value_raw)}
+                </div>
+              </div>
+
+              <!-- Verdict reasoning -->
+              <div class="rel-reasoning">
+                <div class="reasoning-verdict">
+                  ${verdictBadge(r.verdict)}
+                  ${r.reason_code ? `<span class="reason-chip">${esc(rcLabel)}</span>` : ''}
+                  <span class="text-muted" style="font-size:.75rem">confidence: ${(r.confidence * 100).toFixed(0)}%</span>
+                </div>
+                ${rcDesc ? `<p class="reasoning-rc-desc">${esc(rcDesc)}</p>` : ''}
+                ${r.explanation ? `<p class="reasoning-explanation">${esc(r.explanation)}</p>` : ''}
+              </div>
+
+              <!-- Human review actions -->
+              ${r.verdict === 'likely_conflict' ? `
+                <div class="rel-actions">
+                  <button class="btn btn-sm btn-success" onclick="reviewRel('${r.relationship_id}', 'human_verified', this)">✓ Verify Conflict</button>
+                  <button class="btn btn-sm btn-danger" onclick="reviewRel('${r.relationship_id}', 'rejected', this)">✗ Reject</button>
+                </div>` : ''}
             </div>
-          </div>
-          <div class="rel-facts">
-            <div class="rel-fact-box">
-              <div class="label">Source A <span class="text-muted">${esc(r.left_fact?.document_id?.slice(-8) || '')}</span></div>
-              <div class="entity">${esc(r.left_fact?.entity_raw || '—')}</div>
-              <div class="metric">${esc(r.left_fact?.metric_raw || '—')}</div>
-              <div class="value">${esc(r.left_fact?.value_raw || '—')}</div>
-              <div class="text-muted" style="font-size:.72rem">${esc(r.left_fact?.period_raw || '')}</div>
-            </div>
-            <div class="rel-connector">${r.verdict === 'corroborates' ? '≈' : r.verdict === 'reconciles' ? '⟺' : r.verdict === 'likely_conflict' ? '⚡' : '?'}</div>
-            <div class="rel-fact-box">
-              <div class="label">Source B <span class="text-muted">${esc(r.right_fact?.document_id?.slice(-8) || '')}</span></div>
-              <div class="entity">${esc(r.right_fact?.entity_raw || '—')}</div>
-              <div class="metric">${esc(r.right_fact?.metric_raw || '—')}</div>
-              <div class="value">${esc(r.right_fact?.value_raw || '—')}</div>
-              <div class="text-muted" style="font-size:.72rem">${esc(r.right_fact?.period_raw || '')}</div>
-            </div>
-          </div>
-          <div class="rel-explanation">${esc(r.explanation)}</div>
-          ${r.verdict === 'likely_conflict' ? `
-            <div class="rel-actions">
-              <button class="btn btn-sm btn-success" onclick="reviewRel('${r.relationship_id}', 'human_verified', this)">✓ Verify Evidence</button>
-              <button class="btn btn-sm btn-danger" onclick="reviewRel('${r.relationship_id}', 'rejected', this)">✗ Reject</button>
-            </div>` : ''}
-        </div>`).join('');
+          </div>`;
+      }).join('');
     } catch (e) {
-      grid.innerHTML = `<p class="text-red">${esc(e.message)}</p>`;
+      list.innerHTML = `<p class="text-red">${esc(e.message)}</p>`;
     }
   }
+
+  window.toggleRelAccordion = (bodyId, btn) => {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    const isOpen = !body.classList.contains('hidden');
+    body.classList.toggle('hidden', isOpen);
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!isOpen));
+      const chevron = btn.querySelector('.accordion-chevron');
+      if (chevron) chevron.textContent = isOpen ? '▸' : '▾';
+      btn.classList.toggle('is-open', !isOpen);
+    }
+  };
 
   window.reviewRel = async (id, state, btn) => {
     btn.disabled = true;
@@ -391,31 +588,89 @@ function initIndexPage() {
     } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
   };
 
-  // Rejected candidates
+  // Verdict chip clicks
+  document.querySelectorAll('.verdict-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.verdict-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeRelVerdict = chip.dataset.verdict || '';
+      loadRelationships();
+    });
+  });
+
+  // ── Task 2: Rejected candidates grouped by reason code ────
   async function loadRejected() {
-    const tbody = document.getElementById('rejected-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center"><span class="spinner"></span></td></tr>';
+    const container = document.getElementById('rejected-groups');
+    if (!container) return;
+    container.innerHTML = '<div style="padding:40px;text-align:center"><span class="spinner"></span></div>';
     try {
-      const rows = await API.rejectedCandidates({});
+      const rows = await API.rejectedCandidates({ limit: 500 });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">No rejected candidates</td></tr>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><p>No rejected candidates found.</p></div>';
         return;
       }
-      tbody.innerHTML = rows.map(r => `
-        <tr>
-          <td class="text-secondary" style="font-size:.78rem">${esc(r.entity_raw)}</td>
-          <td class="text-secondary" style="font-size:.78rem">${esc(r.metric_raw)}</td>
-          <td class="fact-value">${esc(r.value_raw)}</td>
-          <td><span class="badge badge-rejected">${esc(r.rejection_reason?.replace(/_/g,' '))}</span></td>
-          <td class="text-muted" style="font-size:.72rem">${esc(r.extraction_method)}</td>
-        </tr>`).join('');
+
+      // Group by rejection_reason
+      const groups = {};
+      for (const r of rows) {
+        const key = r.rejection_reason || 'unknown';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      }
+
+      // Sort groups by count descending
+      const sortedGroups = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+
+      container.innerHTML = sortedGroups.map(([reason, items]) => {
+        const groupId = `rg-${reason.replace(/[^a-z0-9]/gi, '_')}`;
+        const bodyId = `rgb-${reason.replace(/[^a-z0-9]/gi, '_')}`;
+        const desc = rejectionDesc(reason);
+        const label = reason.replace(/_/g, ' ');
+        return `
+          <div class="rejected-group" id="${groupId}">
+            <button class="rejected-group-header" onclick="toggleRejectedGroup('${bodyId}', this)" aria-expanded="false">
+              <div class="rg-left">
+                <span class="rg-count">${items.length}</span>
+                <span class="rg-label">× ${esc(label)}</span>
+              </div>
+              <span class="accordion-chevron">▸</span>
+            </button>
+            <div class="rg-desc">${esc(desc)}</div>
+            <div class="rejected-group-body hidden" id="${bodyId}">
+              ${items.map(r => `
+                <div class="rejected-entry">
+                  <div class="re-header">
+                    <span class="re-entity">${esc(r.entity_raw || '—')}</span>
+                    <span class="re-sep">·</span>
+                    <span class="re-metric">${esc(r.metric_raw || '—')}</span>
+                    <span class="re-sep">·</span>
+                    <span class="re-value">${esc(r.value_raw || '—')}</span>
+                    ${r.pdf_page_index != null ? `<span class="text-muted" style="font-size:.7rem">p.${r.pdf_page_index}</span>` : ''}
+                    <span class="badge" style="font-size:.62rem">${esc(r.extraction_method || '')}</span>
+                  </div>
+                  ${r.source_text ? `<div class="re-source-text">${esc(r.source_text)}</div>` : ''}
+                </div>`).join('')}
+            </div>
+          </div>`;
+      }).join('');
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-red">${esc(e.message)}</td></tr>`;
+      container.innerHTML = `<p class="text-red">${esc(e.message)}</p>`;
     }
   }
 
-  // Tabs
+  window.toggleRejectedGroup = (bodyId, btn) => {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    const isOpen = !body.classList.contains('hidden');
+    body.classList.toggle('hidden', isOpen);
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!isOpen));
+      const chevron = btn.querySelector('.accordion-chevron');
+      if (chevron) chevron.textContent = isOpen ? '▸' : '▾';
+    }
+  };
+
+  // ── Tabs ──────────────────────────────────────────────────
   const tabBtns = document.querySelectorAll('.tab');
   const tabPanels = document.querySelectorAll('.tab-panel');
   tabBtns.forEach(btn => {
@@ -425,8 +680,8 @@ function initIndexPage() {
       btn.classList.add('active');
       const target = document.getElementById(btn.dataset.tab);
       if (target) target.classList.remove('hidden');
-      if (btn.dataset.tab === 'facts-panel') loadFacts();
       if (btn.dataset.tab === 'rels-panel') loadRelationships();
+      if (btn.dataset.tab === 'facts-panel') loadFacts();
       if (btn.dataset.tab === 'rejected-panel') loadRejected();
     });
   });
@@ -447,12 +702,11 @@ function initIndexPage() {
     factsPage = 1;
     loadFacts();
   });
-  document.getElementById('verdict-filter')?.addEventListener('change', loadRelationships);
 
-  // Init
+  // Init — load stats + relationships (primary) first
+  loadStats();
   loadDocuments();
-  loadFacts();
-  loadRelationships();
+  loadRelationships();  // primary tab is now Relationships
 }
 
 // ── Document detail page ──────────────────────────────────
@@ -499,7 +753,6 @@ function initDocumentPage(documentId) {
     }
   }
 
-  // Load facts for this document
   async function loadDocFacts() {
     const tbody = document.getElementById('doc-facts-tbody');
     if (!tbody) return;
@@ -572,7 +825,7 @@ function initFactPage(factId) {
           </div>
         </div>
 
-        ${renderEvidence(fact.evidence)}
+        ${renderEvidence(fact.evidence, fact.value_raw)}
 
         <div class="mt-32">
           <div class="section-header">
@@ -592,7 +845,7 @@ function initFactPage(factId) {
                 <div class="value">${esc(other.value_raw)}</div>
               </div>
               <div class="rel-explanation mt-8">${esc(r.explanation)}</div>
-              ${renderEvidence(other.evidence)}
+              ${renderEvidence(other.evidence, other.value_raw)}
               ${r.verdict === 'likely_conflict' ? `<div class="badge badge-likely_conflict mt-8">⚠ Human review required before confirming conflict</div>` : ''}
             </div>`;
           }).join('') + `</div>` : '<div class="empty-state"><div class="empty-icon">🔗</div><p>No relationships found for this fact</p></div>'}

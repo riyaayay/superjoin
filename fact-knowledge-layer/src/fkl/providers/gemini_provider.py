@@ -53,7 +53,8 @@ Rules:
 7. For percentage facts: capture the number and '%' as written.
 8. Also extract semantic and governance facts (appointments, resignations, retirements, corporate actions, policy/status declarations), even with no numeric value. metric_raw must only use role/title/topic words that appear verbatim in the source text. Never substitute, infer, or embellish with a different or more senior-sounding title. value_raw is the key action or role/target described.
 9. scope should be a dict, e.g. {"consolidation": "standalone"} or {}.
-10. confidence_hint: 0.0-1.0, where 1.0 = the value is unambiguously stated."""
+10. confidence_hint: 0.0-1.0, where 1.0 = the value is unambiguously stated.
+11. IGNORE boilerplate disclaimers, fictional notices, or synthetic dataset disclosures (e.g. 'fictional company', 'for testing purposes only', 'evaluation only'). Do NOT extract statements about the document being synthetic/fictional as facts."""
 
 _EXTRACT_USER = """Extract facts from this text block. Return a JSON array of fact objects.
 
@@ -101,19 +102,20 @@ def _parse_retry_delay(error_str: str) -> float:
     return 15.0 + random.uniform(0, 5)
 
 
+class GeminiModelError(Exception):
+    """Raised when a Gemini model is invalid, not found, or inaccessible."""
+    pass
+
+
 class GeminiProvider:
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gemini-3.5-flash-lite",
-        rpm_limit: int = 15,
+        model_name: str,
+        rpm_limit: int = 10,
         max_retries: int = 3,
     ):
         genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=_EXTRACT_SYSTEM,
-        )
         self._model_name = model_name
         self._rpm_limit = rpm_limit
         self._max_retries = max_retries
@@ -121,6 +123,20 @@ class GeminiProvider:
         self._min_interval = (60.0 / rpm_limit) * 1.1
         self._last_call_time: float = 0.0
         self._metric_cache: dict[tuple[str, str], dict] = {}
+
+        # Fail loudly instead of silently on a bad model name at boot
+        model_id = model_name if model_name.startswith("models/") else f"models/{model_name}"
+        try:
+            genai.get_model(model_id)
+        except Exception as e:
+            raise ValueError(
+                f"Configured Gemini model '{model_name}' is invalid or inaccessible: {e}"
+            ) from e
+
+        self._model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=_EXTRACT_SYSTEM,
+        )
 
     def _throttle(self) -> None:
         """Block until enough time has passed to stay within RPM limit."""
@@ -140,7 +156,18 @@ class GeminiProvider:
                 return response.text.strip()
             except Exception as e:
                 err_str = str(e)
-                if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+                err_type = type(e).__name__
+                # Distinguish model not found / invalid argument errors from transient rate-limit errors
+                if (
+                    "404" in err_str
+                    or "NotFound" in err_type
+                    or "InvalidArgument" in err_type
+                    or "not found" in err_str.lower()
+                ):
+                    logger.critical("Fatal Gemini model error (%s): %s", err_type, err_str)
+                    raise GeminiModelError(f"Fatal Gemini model error for '{self._model_name}': {e}") from e
+
+                if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower() or "ResourceExhausted" in err_type:
                     retry_secs = min(_parse_retry_delay(err_str), 25.0)
                     if attempt < self._max_retries:
                         logger.warning(
@@ -175,13 +202,23 @@ class GeminiProvider:
                 generation_config=genai.GenerationConfig(
                     response_mime_type="application/json",
                     temperature=0.0,
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,
                 ),
             )
             # Strip markdown fences if present
-            raw = re.sub(r"^```(?:json)?\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-            data = json.loads(raw)
+            raw = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+            raw = re.sub(r"\s*```$", "", raw.strip(), flags=re.MULTILINE)
+            raw = raw.strip()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                if raw.startswith("[") and not raw.endswith("]"):
+                    try:
+                        data = json.loads(raw + "]")
+                    except Exception:
+                        data = []
+                else:
+                    data = []
             if not isinstance(data, list):
                 logger.warning("LLM returned non-list: %s", type(data))
                 return []
@@ -201,6 +238,8 @@ class GeminiProvider:
                 except (ValidationError, TypeError) as e:
                     logger.warning("Candidate validation failed: %s | item: %s", e, item)
             return candidates
+        except GeminiModelError:
+            raise
         except Exception as e:
             logger.error("Gemini extract_facts error: %s", e)
             return []
@@ -259,6 +298,8 @@ class GeminiProvider:
                 except (ValidationError, TypeError) as e:
                     logger.warning("Image candidate validation failed: %s | item: %s", e, item)
             return candidates
+        except GeminiModelError:
+            raise
         except Exception as e:
             logger.warning("Gemini extract_from_image error (block %s): %s", block.id, e)
             return []
@@ -281,9 +322,12 @@ class GeminiProvider:
             return self._metric_cache[cache_key]
 
         prompt = (
-            f"Are these two metric descriptions referring to the same underlying measurement? "
-            f"Left: '{left.metric_raw}'. Right: '{right.metric_raw}'. "
-            f"Reply with JSON: {{\"same\": true/false, \"canonical\": \"<shared label or left>\", \"similarity\": 0-1}}"
+            "You are a financial analyst. Do these two metric descriptions refer to the same underlying financial/economic concept or metric category "
+            "(e.g., revenue vs turnover vs operating revenue, headcount vs employees, total debt vs borrowings)? "
+            "Note: differing reporting scope (consolidated vs standalone) or time period is evaluated separately; determine if the core metrics are conceptually equivalent.\n"
+            f"Left metric: '{left.metric_raw}'\n"
+            f"Right metric: '{right.metric_raw}'\n"
+            "Reply with JSON: {\"same\": true/false, \"canonical\": \"<shared concept name or left>\", \"similarity\": 0.0-1.0}"
         )
         try:
             raw = self._generate_with_retry(
@@ -303,6 +347,8 @@ class GeminiProvider:
                 res["canonical_label"] = res["canonical"]
             self._metric_cache[cache_key] = res
             return res
+        except GeminiModelError:
+            raise
         except Exception as e:
             logger.error("Gemini canonicalise_metric error: %s", e)
             fallback = {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
@@ -323,6 +369,8 @@ class GeminiProvider:
                 generation_config=genai.GenerationConfig(temperature=0.1, max_output_tokens=128),
             )
             return raw
+        except GeminiModelError:
+            raise
         except Exception as e:
             logger.error("Gemini explain_relationship error: %s", e)
             return "Explanation unavailable."

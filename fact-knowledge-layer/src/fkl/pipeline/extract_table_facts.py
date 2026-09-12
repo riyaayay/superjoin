@@ -14,6 +14,7 @@ from typing import Any
 from fkl.domain.enums import BlockKind
 from fkl.domain.models import ExtractionStats, FactCandidate, SourceBlock
 from fkl.domain.normalisation import detect_scale
+from fkl.pipeline.parse_pdf import check_suspect_interleaving
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,10 @@ def extract_table_facts(
         ctx = block.table_context
         if not ctx:
             continue
+
+        col_headers = ctx.column_headers or []
+        if ctx.parse_quality is None and check_suspect_interleaving(ctx.row_header, col_headers):
+            ctx.parse_quality = "suspect_interleaving"
 
         if stats is not None:
             stats.table_cells_total += 1

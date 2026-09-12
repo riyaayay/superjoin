@@ -13,6 +13,34 @@ from fkl.persistence import repositories
 router = APIRouter(prefix="/api/relationships", tags=["relationships"])
 
 
+def _format_fact_with_evidence(fact, db: Session) -> dict | None:
+    """Return fact fields + evidence block fields needed for inline accordion display."""
+    if not fact:
+        return None
+    block = repositories.get_block(db, fact.evidence_block_id)
+    tc = json.loads(block.table_context_json) if (block and block.table_context_json) else None
+    bbox = json.loads(block.bbox_json) if (block and block.bbox_json) else None
+    return {
+        "fact_id": fact.id,
+        "entity_raw": fact.entity_raw,
+        "metric_raw": fact.metric_raw,
+        "value_raw": fact.value_raw,
+        "unit_raw": fact.unit_raw,
+        "period_raw": fact.period_raw,
+        "document_id": fact.document_id,
+        "extraction_method": fact.extraction_method,
+        "evidence": {
+            "block_id": block.id if block else None,
+            "pdf_page_index": block.pdf_page_index if block else None,
+            "printed_page_label": block.printed_page_label if block else None,
+            "block_kind": block.block_kind if block else None,
+            "text": (block.text[:800] if block else None),
+            "bbox": bbox,
+            "table_context": tc,
+        } if block else None,
+    }
+
+
 @router.get("")
 def list_relationships(
     verdict: str | None = Query(None),
@@ -33,22 +61,8 @@ def list_relationships(
             "confidence": r.confidence,
             "review_state": r.review_state,
             "comparison": json.loads(r.comparison_json),
-            "left_fact": {
-                "fact_id": lf.id if lf else None,
-                "entity_raw": lf.entity_raw if lf else None,
-                "metric_raw": lf.metric_raw if lf else None,
-                "value_raw": lf.value_raw if lf else None,
-                "period_raw": lf.period_raw if lf else None,
-                "document_id": lf.document_id if lf else None,
-            },
-            "right_fact": {
-                "fact_id": rf.id if rf else None,
-                "entity_raw": rf.entity_raw if rf else None,
-                "metric_raw": rf.metric_raw if rf else None,
-                "value_raw": rf.value_raw if rf else None,
-                "period_raw": rf.period_raw if rf else None,
-                "document_id": rf.document_id if rf else None,
-            },
+            "left_fact": _format_fact_with_evidence(lf, db),
+            "right_fact": _format_fact_with_evidence(rf, db),
         })
     return {"total": total, "page": page, "limit": limit, "items": items}
 
@@ -79,8 +93,10 @@ def list_rejected_candidates(
 ):
     """Return visible rejected candidates — demo case #4."""
     rows = repositories.list_rejected_candidates(db, document_id=document_id, limit=limit)
-    return [
-        {
+    result = []
+    for r in rows:
+        block = repositories.get_block(db, r.evidence_block_id) if r.evidence_block_id else None
+        result.append({
             "id": r.id,
             "document_id": r.document_id,
             "entity_raw": r.entity_raw,
@@ -89,6 +105,8 @@ def list_rejected_candidates(
             "rejection_reason": r.rejection_reason,
             "extraction_method": r.extraction_method,
             "created_at": r.created_at,
-        }
-        for r in rows
-    ]
+            "source_text": block.text[:400] if block else None,
+            "pdf_page_index": block.pdf_page_index if block else None,
+            "block_kind": block.block_kind if block else None,
+        })
+    return result

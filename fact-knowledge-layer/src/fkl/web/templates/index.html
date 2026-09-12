@@ -1,30 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Fact Knowledge Layer — Evidence-First PDF Analysis{% endblock %}
+{% block title %}Fact Knowledge Layer{% endblock %}
 
 {% block content %}
-<section class="hero">
-  <div class="hero-badge">⬡ Evidence-First · No Hard-Coded Logic · Traceable Facts</div>
-  <h1>Fact Knowledge Layer</h1>
-  <p>Upload PDFs and discover how facts corroborate, contradict, or reconcile across documents — with full source evidence.</p>
-</section>
 
-<!-- Upload Card -->
-<div class="upload-card">
-  <h2>📤 Upload PDF Document</h2>
-  <div class="upload-zone" id="upload-zone">
-    <input type="file" id="file-input" accept=".pdf,application/pdf" multiple/>
-    <div class="upload-icon">📄</div>
-    <p><strong>Click to browse</strong> or drag &amp; drop PDF(s)</p>
-    <small>Max 50 MB each · PDF only · SHA-256 deduplicated · Multiple files supported</small>
+<!-- Page header -->
+<div class="page-header">
+  <h1>⬡ Fact Knowledge Layer</h1>
+  <p>Upload PDFs to extract facts and discover how they corroborate, contradict, or reconcile across documents.</p>
+</div>
+
+<!-- Stats strip -->
+<div class="stats-row" id="global-stats-row">
+  <div class="stat-card">
+    <div class="stat-num stat-num--blue" id="stat-docs">—</div>
+    <div class="stat-label">Documents</div>
   </div>
-  <div id="selected-file" class="text-muted mb-16" style="font-size:.82rem"></div>
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <button class="btn btn-primary" id="upload-btn" disabled>⬆ Upload PDF</button>
-    <div id="upload-status"></div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--green" id="stat-facts">—</div>
+    <div class="stat-label">Accepted Facts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--blue" id="stat-rels">—</div>
+    <div class="stat-label">Relationships</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--green" id="stat-corr">—</div>
+    <div class="stat-label">Corroborates</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--amber" id="stat-rec">—</div>
+    <div class="stat-label">Reconciled</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num stat-num--red" id="stat-conf">—</div>
+    <div class="stat-label">Conflicts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="stat-ins" style="color:var(--text-3)">—</div>
+    <div class="stat-label">Insuff. Context</div>
   </div>
 </div>
 
-<!-- Documents Grid -->
+<!-- Upload -->
+<div class="upload-card">
+  <h2>Upload PDF</h2>
+  <div class="upload-zone" id="upload-zone">
+    <input type="file" id="file-input" accept=".pdf,application/pdf" multiple/>
+    <div class="upload-icon">📄</div>
+    <p><strong>Click to choose</strong> or drag &amp; drop PDF files here</p>
+    <small>PDF only · up to 50 MB · multiple files supported</small>
+  </div>
+  <!-- Selected files shown here as a pill -->
+  <div id="selected-file"></div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px">
+    <button class="btn btn-primary" id="upload-btn" disabled>Upload</button>
+    <div id="upload-status" style="font-size:12.5px;color:var(--text-2)"></div>
+  </div>
+</div>
+
+<!-- Documents -->
 <div class="section-header">
   <h2><span class="section-icon">📂</span> Documents</h2>
 </div>
@@ -32,15 +66,29 @@
   <div class="empty-state"><span class="spinner"></span></div>
 </div>
 
-<!-- Tabbed content: Facts / Relationships / Rejected -->
+<!-- Tabs -->
 <div class="tabs">
-  <button class="tab active" data-tab="facts-panel">📊 Facts</button>
-  <button class="tab" data-tab="rels-panel">🔗 Relationships</button>
-  <button class="tab" data-tab="rejected-panel">⚠ Rejected Candidates</button>
+  <button class="tab active" data-tab="rels-panel">🔗 Relationships</button>
+  <button class="tab" data-tab="facts-panel">📊 Facts</button>
+  <button class="tab" data-tab="rejected-panel">⚠ Rejected</button>
+</div>
+
+<!-- Relationships panel -->
+<div id="rels-panel" class="tab-panel">
+  <div class="verdict-chips" id="verdict-chips">
+    <button class="verdict-chip active" data-verdict="">All</button>
+    <button class="verdict-chip chip--corroborates" data-verdict="corroborates">✓ Corroborates</button>
+    <button class="verdict-chip chip--reconciles" data-verdict="reconciles">⟺ Reconciled</button>
+    <button class="verdict-chip chip--likely_conflict" data-verdict="likely_conflict">⚡ Conflicts</button>
+    <button class="verdict-chip chip--insufficient_context" data-verdict="insufficient_context">? Insufficient Context</button>
+  </div>
+  <div id="rels-list">
+    <div style="padding:40px;text-align:center"><span class="spinner"></span></div>
+  </div>
 </div>
 
 <!-- Facts panel -->
-<div id="facts-panel" class="tab-panel">
+<div id="facts-panel" class="tab-panel hidden">
   <div class="filters-bar">
     <input class="filter-input" id="entity-filter" placeholder="Filter by entity…"/>
     <input class="filter-input" id="metric-filter" placeholder="Filter by metric…"/>
@@ -50,19 +98,14 @@
       <option value="needs_review">Needs review</option>
       <option value="rejected">Rejected</option>
     </select>
-    <span class="text-muted" style="font-size:.8rem">Total: <strong id="facts-total">—</strong></span>
+    <span class="text-muted" style="font-size:12px">Total: <strong id="facts-total">—</strong></span>
   </div>
   <div class="facts-table-wrap">
     <table class="facts-table">
       <thead>
         <tr>
-          <th>Entity</th>
-          <th>Metric</th>
-          <th>Value (raw)</th>
-          <th>Period</th>
-          <th>Unit</th>
-          <th>State</th>
-          <th>Doc</th>
+          <th>Entity</th><th>Metric</th><th>Value</th>
+          <th>Period</th><th>Unit</th><th>State</th><th>Doc</th>
         </tr>
       </thead>
       <tbody id="facts-tbody">
@@ -72,42 +115,14 @@
   </div>
 </div>
 
-<!-- Relationships panel -->
-<div id="rels-panel" class="tab-panel hidden">
-  <div class="filters-bar">
-    <select class="filter-select" id="verdict-filter">
-      <option value="">All verdicts</option>
-      <option value="corroborates">Corroborates</option>
-      <option value="reconciles">Reconciles</option>
-      <option value="likely_conflict">Likely Conflict</option>
-      <option value="insufficient_context">Insufficient Context</option>
-    </select>
-  </div>
-  <div class="rel-grid" id="rels-grid">
+<!-- Rejected panel -->
+<div id="rejected-panel" class="tab-panel hidden">
+  <p style="font-size:12.5px;color:var(--text-2);margin-bottom:16px">
+    Candidates attempted but rejected — grouped by reason. Every rejection is documented, never silently dropped.
+  </p>
+  <div id="rejected-groups">
     <div style="padding:40px;text-align:center"><span class="spinner"></span></div>
   </div>
 </div>
 
-<!-- Rejected candidates panel -->
-<div id="rejected-panel" class="tab-panel hidden">
-  <p class="text-muted mb-16" style="font-size:.82rem">
-    🔍 Demo Case #4: Extraction and reasoning failures are surfaced here — never silently dropped.
-  </p>
-  <div class="facts-table-wrap">
-    <table class="facts-table">
-      <thead>
-        <tr>
-          <th>Entity</th>
-          <th>Metric</th>
-          <th>Value</th>
-          <th>Rejection Reason</th>
-          <th>Method</th>
-        </tr>
-      </thead>
-      <tbody id="rejected-tbody">
-        <tr><td colspan="5" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
 {% endblock %}

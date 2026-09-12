@@ -168,14 +168,15 @@ def consolidate_governance_facts(facts: list[Fact]) -> list[Fact]:
 def deduplicate_candidates(facts: list[Fact]) -> list[Fact]:
     """Remove duplicate facts and consolidate fragmented governance facts (R7)."""
     facts = consolidate_governance_facts(facts)
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     result: list[Fact] = []
     for f in facts:
         key = (
             f.document_id,
-            f.evidence_block_id,
+            normalise_text(f.entity_canonical or f.entity_raw),
             normalise_text(f.metric_key or f.metric_raw),
             normalise_text(f.value_raw),
+            str(f.period_raw or ""),
         )
         if key not in seen:
             seen.add(key)

@@ -622,3 +622,194 @@ class TestTaskABlockingGate:
             f"Expected 3 LLM calls (cap), got {call_count[0]}"
         )
         assert capped.calls == 3
+
+
+class TestMasterFixAudits:
+    """Master Fix Verification tests for Bugs 1–4, Priority 1, and Priority 2."""
+
+    def test_global_prioritization_and_cap_enforcement(self, monkeypatch):
+        """
+        Drives build_relationships() directly using real Fact and FactORM objects.
+        Verifies that:
+        1. All candidate pairs across the run are collected and globally sorted by entity_jaccard descending.
+        2. The highest entity_jaccard pair is evaluated first before the LLM call budget is exhausted.
+        3. metric_llm_calls_skipped_due_to_cap is correctly tracked in stats.
+        """
+        import os
+        from fkl.pipeline.build_relationships import build_relationships
+        from fkl.domain.models import ExtractionStats
+        from fkl.persistence.orm import FactORM
+        import json
+
+        def _make_orm(f: Fact) -> FactORM:
+            return FactORM(
+                id=f.id,
+                document_id=f.document_id,
+                ingestion_run_id=f.ingestion_run_id,
+                evidence_block_id=f.evidence_block_id,
+                entity_raw=f.entity_raw,
+                entity_canonical=f.entity_canonical,
+                metric_raw=f.metric_raw,
+                metric_key=f.metric_key,
+                value_raw=f.value_raw,
+                numeric_value=f.numeric_value,
+                value_kind=f.value_kind.value,
+                unit_raw=f.unit_raw,
+                unit_dimension=f.unit_dimension.value,
+                scale_raw=f.scale_raw,
+                normalised_value=f.normalised_value,
+                normalised_unit=f.normalised_unit,
+                period_raw=f.period_raw,
+                period_start=f.period_start,
+                period_end=f.period_end,
+                scope_json=json.dumps(f.scope or {}),
+                qualifiers_json=json.dumps(f.qualifiers or {}),
+                extraction_method=f.extraction_method.value,
+                confidence=f.confidence,
+                review_state=f.review_state.value,
+                normalisation_provenance_json="[]",
+                created_at=f.created_at.isoformat(),
+            )
+
+        # Set max metric LLM calls per run to 1
+        monkeypatch.setenv("MAX_METRIC_LLM_CALLS_PER_RUN", "1")
+
+        # Create pairs with varying entity_jaccard across disjoint entity groups:
+        # Pair 1: Entity Jaccard = 1.0 (exact match)
+        f_new_high = _sample_fact(
+            id="f_new_high",
+            doc_id="doc_new_1",
+            entity="Alpha Beta Gamma Delta",
+            metric="Revenue from Operations",
+            value=100.0,
+        )
+        f_ex_high = _sample_fact(
+            id="f_ex_high",
+            doc_id="doc_old_1",
+            entity="Alpha Beta Gamma Delta",
+            metric="Operating Turnover",
+            value=100.0,
+        )
+
+        # Pair 2: Entity Jaccard = 0.60 (3/5 overlap)
+        f_new_med = _sample_fact(
+            id="f_new_med",
+            doc_id="doc_new_2",
+            entity="Epsilon Zeta Eta Theta",
+            metric="Net Operating Profit",
+            value=50.0,
+        )
+        f_ex_med = _sample_fact(
+            id="f_ex_med",
+            doc_id="doc_old_2",
+            entity="Epsilon Zeta Eta Iota",
+            metric="Net Reported Income",
+            value=50.0,
+        )
+
+        # Pair 3: Entity Jaccard = 0.33 (1/3 overlap, passes 0.25 threshold)
+        f_new_low = _sample_fact(
+            id="f_new_low",
+            doc_id="doc_new_3",
+            entity="Omega Sigma",
+            metric="EBITDA Margin",
+            value=25.0,
+        )
+        f_ex_low = _sample_fact(
+            id="f_ex_low",
+            doc_id="doc_old_3",
+            entity="Omega Rho",
+            metric="Operational Cash Margin",
+            value=25.0,
+        )
+
+        # Pass in reverse order: low, then med, then high
+        # If prioritization were missing, low would run first and consume the single call budget!
+        new_facts = [f_new_low, f_new_med, f_new_high]
+        existing_orms = [_make_orm(f_ex_low), _make_orm(f_ex_med), _make_orm(f_ex_high)]
+
+        calls_made = []
+
+        class MockPriorityProvider:
+            def canonicalise_metric(self, left: Fact, right: Fact) -> dict:
+                calls_made.append((left.id, right.id))
+                return {
+                    "same": True,
+                    "canonical": "Standard Metric",
+                    "canonical_label": "Standard Metric",
+                    "similarity": 0.95,
+                }
+
+        provider = MockPriorityProvider()
+        stats = ExtractionStats()
+
+        relationships = build_relationships(
+            new_facts=new_facts,
+            existing_fact_rows=existing_orms,
+            run_id="run_priority_test",
+            metric_provider=provider,
+            stats=stats,
+        )
+
+        # Assertions
+        assert len(calls_made) == 1, f"Expected exactly 1 LLM call due to cap, got {len(calls_made)}"
+        called_pair_ids = set(calls_made[0])
+        assert "f_new_high" in called_pair_ids and "f_ex_high" in called_pair_ids, (
+            f"Expected highest entity_jaccard pair to be evaluated first, but called: {calls_made[0]}"
+        )
+        assert stats.relationship_pairs_llm_fallback_matched >= 1
+        assert stats.metric_llm_calls_skipped_due_to_cap >= 2, (
+            f"Expected remaining gray-zone pairs to be skipped due to cap, got {stats.metric_llm_calls_skipped_due_to_cap}"
+        )
+
+    def test_all_caps_section_heading_not_company_name(self):
+        """Uppercase section headings must not be treated as corporate entity names."""
+        import re
+        from fkl.pipeline.parse_pdf import _CORP_TITLE_RE
+
+        heading = "STEEL CONSUMPTION IN DOMESTIC MARKET"
+        assert _CORP_TITLE_RE.search(heading) is None, "Section heading matched corporate entity regex"
+
+        real_corp = "SOLSTICE POWER HOLDINGS LIMITED"
+        assert _CORP_TITLE_RE.search(real_corp) is not None, "Corporate entity failed to match corporate entity regex"
+
+    def test_table_iou_and_fact_dedup(self):
+        """Test table bbox IoU calculation and fact deduplication across distinct blocks."""
+        from fkl.pipeline.parse_pdf import _bbox_iou
+        from fkl.pipeline.deduplicate import deduplicate_candidates
+
+        # IoU check
+        b1 = (10.0, 10.0, 200.0, 200.0)
+        b2 = (10.0, 10.0, 200.0, 200.0)
+        assert _bbox_iou(b1, b2) == 1.0
+
+        b_distinct = (300.0, 300.0, 500.0, 500.0)
+        assert _bbox_iou(b1, b_distinct) == 0.0
+
+        # Candidate dedup without evidence_block_id
+        f1 = _sample_fact(id="fact_1", doc_id="doc_1", entity="Entity A", metric="Revenue", value=100.0)
+        f1.evidence_block_id = "blk_alpha"
+
+        f2 = _sample_fact(id="fact_2", doc_id="doc_1", entity="Entity A", metric="Revenue", value=100.0)
+        f2.evidence_block_id = "blk_beta"  # Different block, but identical fact
+
+        deduped = deduplicate_candidates([f1, f2])
+        assert len(deduped) == 1, f"Expected 1 fact after deduplication, got {len(deduped)}"
+        assert deduped[0].id == "fact_1"
+
+    def test_meta_disclaimer_rejected_in_grounding(self):
+        """Facts extracted from synthetic/fictional meta-disclaimers must be rejected."""
+        from fkl.pipeline.ground_candidates import ground
+        from tests.unit.test_grounding import _make_block, _make_candidate
+
+        block = _make_block("This is a fictional document created solely for evaluation purposes.")
+        cand = _make_candidate(
+            entity_raw="Document",
+            metric_raw="Status",
+            value_raw="fictional document for evaluation purposes",
+            evidence_quote="fictional document",
+        )
+        res = ground(cand, block)
+        assert res.accepted is False
+        assert res.rejection_reason == "meta_disclaimer_not_a_fact"
+

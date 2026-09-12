@@ -109,13 +109,25 @@ def _passes_blocking(
 
 class _CallCappedProvider:
     """Wraps provider to strictly enforce a maximum number of LLM invocations per run."""
-    def __init__(self, inner: Any, max_calls: int = 5):
+    def __init__(self, inner: Any, max_calls: int | None = None):
+        import os
         self._inner = inner
-        self._max_calls = max_calls
+        if max_calls is None:
+            from fkl.config import get_settings
+            env_val = os.environ.get("MAX_METRIC_LLM_CALLS_PER_RUN")
+            self._max_calls = int(env_val) if env_val else get_settings().max_metric_llm_calls_per_run
+        else:
+            self._max_calls = max_calls
         self.calls = 0
+        self.skipped_due_to_cap = 0
 
     def canonicalise_metric(self, left: Fact, right: Fact) -> dict:
         if self.calls >= self._max_calls:
+            self.skipped_due_to_cap += 1
+            logger.info(
+                "Metric LLM call cap (%d) reached. Skipped %d gray-zone pairs so far.",
+                self._max_calls, self.skipped_due_to_cap,
+            )
             return {"same": False, "canonical": left.metric_raw, "similarity": 0.0}
         self.calls += 1
         return self._inner.canonicalise_metric(left=left, right=right)
@@ -138,6 +150,8 @@ def build_relationships(
     Incremental: only pairs touching a new fact are evaluated.
     Old-old pairs are never recomputed.
     Pairs failing blocking or resolving to INSUFFICIENT_CONTEXT are not persisted.
+    Uses 3-pass global prioritization: collect candidate pairs across all new facts,
+    sort globally by entity_jaccard descending, then classify in prioritized order.
     """
     relationships: list[Relationship] = []
     seen_pairs: set[tuple[str, str]] = set()
@@ -146,13 +160,17 @@ def build_relationships(
     existing_keys = [(f, _blocking_keys(f)) for f in existing_facts]
 
     provider_to_pass = (
-        _CallCappedProvider(metric_provider, max_calls=5)
+        _CallCappedProvider(metric_provider)
         if metric_provider is not None and hasattr(metric_provider, "canonicalise_metric")
         else metric_provider
     )
 
+    # Pass 1: Collect all candidate pairs passing dimension/kind/blocking filters
+    candidate_pairs: list[tuple[float, Fact, Fact, tuple[str, str], float]] = []
+
     for new_fact in new_facts:
         new_keys = _blocking_keys(new_fact)
+        l_ent, l_met = new_keys
 
         for existing_fact, ex_keys in existing_keys:
             # Must be from a different document
@@ -173,8 +191,12 @@ def build_relationships(
             if new_fact.value_kind and existing_fact.value_kind and new_fact.value_kind != existing_fact.value_kind:
                 continue
 
-            # Independent 2D blocking (entity AND metric dimensions)
-            if not _passes_blocking(new_keys, ex_keys):
+            r_ent, r_met = ex_keys
+            ent_union = l_ent | r_ent
+            if not ent_union:
+                continue
+            ent_jaccard = len(l_ent & r_ent) / len(ent_union)
+            if ent_jaccard < ENTITY_BLOCKING_THRESHOLD:
                 continue
 
             # Canonical pair ordering to avoid duplicates
@@ -183,45 +205,60 @@ def build_relationships(
                 continue
             seen_pairs.add(pair)
 
+            met_union = l_met | r_met
+            met_jaccard = len(l_met & r_met) / len(met_union) if met_union else 0.0
+
+            candidate_pairs.append((ent_jaccard, new_fact, existing_fact, pair, met_jaccard))
+
+    # Pass 2: Sort globally across the entire run:
+    # 1. Higher entity_jaccard runs first.
+    # 2. Within same entity_jaccard, higher metric overlap (met_jaccard) runs first.
+    # 3. Deterministic pair ordering tie breaker.
+    candidate_pairs.sort(key=lambda item: (item[0], item[4], item[3]), reverse=True)
+
+    # Pass 3: Classify in globally prioritized order
+    from fkl.domain.enums import Verdict
+
+    for ent_jaccard, left, right, pair, met_jaccard in candidate_pairs:
+        if stats is not None:
+            stats.relationship_pairs_total += 1
+
+        cmp = classify(left, right, metric_provider=provider_to_pass)
+        verdict, reason = decide(cmp)
+
+        if stats is not None:
+            if cmp.match_method == "llm_fallback":
+                stats.relationship_pairs_llm_fallback_matched += 1
+            elif cmp.match_method == "jaccard":
+                stats.relationship_pairs_jaccard_matched += 1
+
+        # Transparency: do not let INSUFFICIENT_CONTEXT dominate /api/relationships
+        if verdict == Verdict.INSUFFICIENT_CONTEXT:
             if stats is not None:
-                stats.relationship_pairs_total += 1
+                stats.relationship_pairs_insufficient_context += 1
+            if insufficient_context_counter is not None:
+                insufficient_context_counter[0] += 1
+            continue
 
-            # Classify
-            left = new_fact
-            right = existing_fact
-            cmp = classify(left, right, metric_provider=provider_to_pass)
-            verdict, reason = decide(cmp)
+        explanation = build_explanation(cmp, verdict, reason)
 
-            # Transparency: do not let INSUFFICIENT_CONTEXT dominate /api/relationships
-            from fkl.domain.enums import Verdict
-            if verdict == Verdict.INSUFFICIENT_CONTEXT:
-                if stats is not None:
-                    stats.relationship_pairs_insufficient_context += 1
-                if insufficient_context_counter is not None:
-                    insufficient_context_counter[0] += 1
-                continue
+        rel = Relationship(
+            id=f"rel_{uuid.uuid4().hex[:12]}",
+            left_fact_id=pair[0],
+            right_fact_id=pair[1],
+            reason_code=reason,
+            verdict=verdict,
+            explanation=explanation,
+            comparison=cmp,
+            confidence=(cmp.evidence_quality_left + cmp.evidence_quality_right) / 2,
+            review_state=RelationshipReviewState.AUTOMATIC,
+            created_by_run_id=run_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        relationships.append(rel)
 
-            if stats is not None:
-                if cmp.match_method == "llm_fallback":
-                    stats.relationship_pairs_llm_fallback_matched += 1
-                elif cmp.match_method == "jaccard":
-                    stats.relationship_pairs_jaccard_matched += 1
-
-            explanation = build_explanation(cmp, verdict, reason)
-
-            rel = Relationship(
-                id=f"rel_{uuid.uuid4().hex[:12]}",
-                left_fact_id=pair[0],
-                right_fact_id=pair[1],
-                reason_code=reason,
-                verdict=verdict,
-                explanation=explanation,
-                comparison=cmp,
-                confidence=(cmp.evidence_quality_left + cmp.evidence_quality_right) / 2,
-                review_state=RelationshipReviewState.AUTOMATIC,
-                created_by_run_id=run_id,
-            )
-            relationships.append(rel)
+    if stats is not None and hasattr(provider_to_pass, "skipped_due_to_cap"):
+        stats.metric_llm_calls_skipped_due_to_cap = provider_to_pass.skipped_due_to_cap
 
     logger.info(
         "build_relationships: %d new facts × %d existing → %d relationships",

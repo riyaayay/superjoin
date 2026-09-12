@@ -186,6 +186,7 @@ def complete_run(
             run.relationship_pairs_jaccard_matched = stats.relationship_pairs_jaccard_matched
             run.relationship_pairs_llm_fallback_matched = stats.relationship_pairs_llm_fallback_matched
             run.relationship_pairs_insufficient_context = stats.relationship_pairs_insufficient_context
+            run.metric_llm_calls_skipped_due_to_cap = stats.metric_llm_calls_skipped_due_to_cap
             if not blocks_skipped_due_to_cap and stats.prose_blocks_skipped_due_to_cap:
                 run.blocks_skipped_due_to_cap = stats.prose_blocks_skipped_due_to_cap
         for k, v in kwargs.items():

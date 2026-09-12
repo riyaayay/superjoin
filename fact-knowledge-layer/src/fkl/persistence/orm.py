@@ -66,6 +66,7 @@ class IngestionRunORM(Base):
     relationship_pairs_jaccard_matched: Mapped[int] = mapped_column(Integer, default=0)
     relationship_pairs_llm_fallback_matched: Mapped[int] = mapped_column(Integer, default=0)
     relationship_pairs_insufficient_context: Mapped[int] = mapped_column(Integer, default=0)
+    metric_llm_calls_skipped_due_to_cap: Mapped[int] = mapped_column(Integer, default=0)
     relationships_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     document: Mapped[DocumentORM] = relationship("DocumentORM", back_populates="runs")

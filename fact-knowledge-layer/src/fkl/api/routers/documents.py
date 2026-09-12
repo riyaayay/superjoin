@@ -131,6 +131,7 @@ def get_document(document_id: str, db: Session = Depends(get_db)):
             "relationship_pairs_jaccard_matched": getattr(r, "relationship_pairs_jaccard_matched", 0),
             "relationship_pairs_llm_fallback_matched": getattr(r, "relationship_pairs_llm_fallback_matched", 0),
             "relationship_pairs_insufficient_context": getattr(r, "relationship_pairs_insufficient_context", 0),
+            "metric_llm_calls_skipped_due_to_cap": getattr(r, "metric_llm_calls_skipped_due_to_cap", 0),
             "relationships_error": getattr(r, "relationships_error", None),
         }
         for r in doc.runs

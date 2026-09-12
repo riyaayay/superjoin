@@ -42,6 +42,7 @@ class TableContext(BaseModel):
     cell_value: str = ""
     unit_note: str | None = None
     footnote: str | None = None
+    parse_quality: str | None = None
 
 
 class SourceBlock(BaseModel):
@@ -217,6 +218,7 @@ class ExtractionStats(BaseModel):
     relationship_pairs_jaccard_matched: int = 0
     relationship_pairs_llm_fallback_matched: int = 0
     relationship_pairs_insufficient_context: int = 0
+    metric_llm_calls_skipped_due_to_cap: int = 0
 
 
 # ---------------------------------------------------------------------------

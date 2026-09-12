@@ -1,0 +1,297 @@
+DOCS: [('doc_571d2e492b944de8', '01-solstice-prospectus-2021.pdf'), ('doc_0ec6c32422194000', '02-solstice-annual-report-fy23.pdf'), ('doc_b409c8b7ae174676', '03-solstice-investor-deck-q2-fy24.pdf'), ('doc_d1c6161675d34338', '04-unseen-meridian-coop-notice.pdf')]
+
+================================================================================
+FACTS PER DOCUMENT:
+
+=== 01-solstice-prospectus-2021.pdf (doc_571d2e492b944de8) ===
+Total facts: 18
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 1,901.15 (Nine months ended Sep 30, 2021) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 1,148.90 (Nine months ended Sep 30, 2020) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit / (loss) for the period = (96.30) (Nine months ended Sep 30, 2021) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit / (loss) for the period = (211.80) (Nine months ended Sep 30, 2020) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 612 (Nine months ended Sep 30, 2021) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 441 (Nine months ended Sep 30, 2020) | scope: {"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | standalone financial information = unaudited (nine months ended September 30, 2021 and the nine months ended September 30, 2020) | scope: {"consolidation": "standalone"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | financial figures = Rs. million (None) | scope: {"consolidation": "standalone"}
+  [text_llm] Solstice Robotics Middle East FZE | incorporation date = March 2021 (None) | scope: {}
+  [text_llm] Solstice Robotics Middle East FZE | commercial operations status = had not commenced (None) | scope: {}
+  [text_llm] top five customers | revenue from operations = 58% (nine months ended September 30, 2021) | scope: {}
+  [text_llm] Ms. Kavita Rao | Managing Director = Managing Director (None) | scope: {"role_status": "active"}
+  [text_llm] Mr. Arjun Mehta | Independent Director = Independent Director (February 12, 2021) | scope: {"role_status": "appointed"}
+  [text_llm] Mr. Devesh Kulkarni | Whole-time Director = Whole-time Director (None) | scope: {"role_status": "active"}
+  [text_llm] Mr. Devesh Kulkarni | Chief Financial Officer = Chief Financial Officer (None) | scope: {"role_status": "active"}
+  [text_llm] Ms. Priya Ahluwalia | Independent Director = Independent Director (None) | scope: {"role_status": "active"}
+
+=== 02-solstice-annual-report-fy23.pdf (doc_0ec6c32422194000) ===
+Total facts: 33
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,268.91 (Year ended Mar 31, 2023) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,401.20 (Year ended Mar 31, 2023 (Pro forma)) | scope: {"consolidation": "consolidated", "qualifier": "pro_forma"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,014.55 (Year ended Mar 31, 2022) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,058.10 (Year ended Mar 31, 2022 (Restated)) | scope: {"consolidation": "consolidated", "qualifier": "restated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Other income = 62.40 (Year ended Mar 31, 2023) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Other income = 62.40 (Year ended Mar 31, 2023 (Pro forma)) | scope: {"consolidation": "consolidated", "qualifier": "pro_forma"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Other income = 44.10 (Year ended Mar 31, 2022) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Other income = 44.10 (Year ended Mar 31, 2022 (Restated)) | scope: {"consolidation": "consolidated", "qualifier": "restated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 4,331.31 (Year ended Mar 31, 2023) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 4,463.60 (Year ended Mar 31, 2023 (Pro forma)) | scope: {"consolidation": "consolidated", "qualifier": "pro_forma"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 3,058.65 (Year ended Mar 31, 2022) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total income = 3,102.20 (Year ended Mar 31, 2022 (Restated)) | scope: {"consolidation": "consolidated", "qualifier": "restated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total expenses = 3,986.02 (Year ended Mar 31, 2023) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total expenses = 4,090.15 (Year ended Mar 31, 2023 (Pro forma)) | scope: {"consolidation": "consolidated", "qualifier": "pro_forma"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total expenses = 2,981.40 (Year ended Mar 31, 2022) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Total expenses = 3,015.90 (Year ended Mar 31, 2022 (Restated)) | scope: {"consolidation": "consolidated", "qualifier": "restated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit before tax = 345.29 (Year ended Mar 31, 2023) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit before tax = 373.45 (Year ended Mar 31, 2023 (Pro forma)) | scope: {"consolidation": "consolidated", "qualifier": "pro_forma"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit before tax = 77.25 (Year ended Mar 31, 2022) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Profit before tax = 86.30 (Year ended Mar 31, 2022 (Restated)) | scope: {"consolidation": "consolidated", "qualifier": "restated"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | Year ended = March 31, 2023 (FY2023) | scope: {}
+  [text_llm] Figures | year ended = March 31, 2022 (year ended March 31, 2022) | scope: {}
+  [text_llm] RoboFlow Systems Private Limited | acquisition = completed (February 3, 2023) | scope: {}
+  [text_llm] revenue recognition policy for extended-warranty contracts | adoption of a revised revenue recognition policy = effective April 1, 2022 (FY2022) | scope: {}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | full-time employees = 1,842 (March 31, 2023) | scope: {"consolidation": "standalone"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | full-time employees = 2,105 (March 31, 2023) | scope: {"consolidation": "consolidated"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | Scope 1 greenhouse gas emissions = 1,240 (year ended March 31, 2023) | scope: {"consolidation": "standalone"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | Scope 2 (location-based) emissions = 3,860 (year ended March 31, 2023) | scope: {"consolidation": "standalone"}
+  [text_llm] SOLSTICE ROBOTICS LIMITED | total electricity consumption = 6.4 million (year ended March 31, 2023) | scope: {"location": "all owned facilities", "consolidation": "standalone"}
+  [text_llm] Ms. Kavita Rao | Board Position: Managing Director = Managing Director (as of March 31, 2023) | scope: {"role_status": "appointed"}
+  [text_llm] Mr. Devesh Kulkarni | Whole-time Director and Chief Financial Officer = Whole-time Director and Chief Financial Officer (as of March 31, 2023) | scope: {"role_status": "active"}
+  [text_llm] Ms. Priya Ahluwalia | Independent Director = Independent Director (as of March 31, 2023) | scope: {"role_status": "active"}
+  [text_llm] Mr. Arjun Mehta | Independent Director = resigned (June 30, 2022) | scope: {"role_status": "resigned"}
+
+=== 03-solstice-investor-deck-q2-fy24.pdf (doc_b409c8b7ae174676) ===
+Total facts: 14
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Gross margin (%) = 41.2% (Q2 FY24) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Gross margin (%) = 37.5% (Q2 FY23) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Active deployed robot units = 8,640 (Q2 FY24) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Active deployed robot units = 5,910 (Q2 FY23) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Warehouse customers (cumulative) = 212 (Q2 FY24) | scope: {"consolidation": "consolidated"}
+  [table_rule] SOLSTICE ROBOTICS LIMITED | Warehouse customers (cumulative) = 158 (Q2 FY23) | scope: {"consolidation": "consolidated"}
+  [text_llm] Investor Update | Quarter = Q2 FY24 (Q2 FY24) | scope: {}
+  [text_llm] Investor Update | Quarter ended = September 30, 2023 (September 30, 2023) | scope: {}
+  [text_llm] Solstice | consolidated revenue = 427 Cr (FY23) | scope: {"consolidation": "consolidated"}
+  [text_llm] Solstice | full-time workforce = ~1,950 (as of the close of the fiscal year) | scope: {}
+  [text_llm] Board composition | changes = no further changes (None) | scope: {}
+  [text_llm] top five customers | revenue from operations = 39% (Q2 FY24) | scope: {}
+
+=== 04-unseen-meridian-coop-notice.pdf (doc_d1c6161675d34338) ===
+Total facts: 12
+  [text_llm] Meridian Grocery Co-operative Society | Annual General Meeting = October 2025 (October 2025) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society Ltd. | Annual General Meeting = October 18, 2025 (None) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society Ltd. | performance = year ended March 31, 2025 (year ended March 31, 2025) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | active member-households = 4,120 (as of March 31, 2025) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | active member-households = 3,760 (as of March 31, 2024) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | Total trading surplus = 18.4 (year) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | Total trading surplus = 21.1 (prior year) | scope: {}
+  [text_llm] cold-storage infrastructure | expenditure = one-time (January 2025) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | per-member average annual purchase value = 9,845 (None) | scope: {}
+  [text_llm] Meridian Grocery Co-operative Society | per-member average annual purchase value = 8,930 (prior year) | scope: {}
+  [text_llm] Mr. Fernandes | committee member = passing (February 2025) | scope: {"role_status": "active"}
+  [text_llm] Ms. Latika Bhonsle | committee member = elected (March 1, 2025) | scope: {"role_status": "appointed"}
+
+================================================================================
+RELATIONSHIPS:
+Total relationships involving these documents: 40
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (standalone vs consolidated). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (standalone vs consolidated). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.98
+  L: [doc_571d2e492b944de8] top five customers | revenue from operations = 58% (nine months ended September 30, 2021) scope={}
+  R: [doc_b409c8b7ae174676] top five customers | revenue from operations = 39% (Q2 FY24) scope={}
+  Exp: Same metric and entity but different reporting periods (2021-01:2021-12 vs 2023-07:2023-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (standalone vs consolidated). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (standalone vs consolidated). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,058.10 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2022-01:2022-12 vs 2022-07:2022-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,058.10 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  Exp: Same metric and entity but different reporting periods (2022-01:2022-12 vs 2023-07:2023-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,058.10 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,014.55 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2022-01:2022-12 vs 2022-07:2022-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,014.55 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2022-01:2022-12 vs 2023-07:2023-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,014.55 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,901.15 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 4,331.31 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,901.15 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 3,058.65 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,901.15 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 3,102.20 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,148.90 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 4,331.31 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,148.90 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 3,058.65 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,148.90 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 3,102.20 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,401.20 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2022-07:2022-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,401.20 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2023-07:2023-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,401.20 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.85
+  L: [doc_571d2e492b944de8] Ms. Priya Ahluwalia | Independent Director = Independent Director (None) scope={"role_status": "active"}
+  R: [doc_0ec6c32422194000] Mr. Arjun Mehta | Independent Director = resigned (June 30, 2022) scope={"role_status": "resigned"}
+  Exp: Same metric and period but different reporting scope (resigned vs active). Values differ by design; reconciled by scope distinction.
+
+[CORROBORATES] (exact_match) conf=0.85
+  L: [doc_0ec6c32422194000] Ms. Priya Ahluwalia | Independent Director = Independent Director (as of March 31, 2023) scope={"role_status": "active"}
+  R: [doc_571d2e492b944de8] Ms. Priya Ahluwalia | Independent Director = Independent Director (None) scope={"role_status": "active"}
+  Exp: Both facts report the same value (the reported value) for the same metric, entity, and period.
+
+[RECONCILES] (different_scope) conf=0.90
+  L: [doc_571d2e492b944de8] Mr. Arjun Mehta | Independent Director = Independent Director (February 12, 2021) scope={"role_status": "appointed"}
+  R: [doc_0ec6c32422194000] Mr. Arjun Mehta | Independent Director = resigned (June 30, 2022) scope={"role_status": "resigned"}
+  Exp: Same metric and period but different reporting scope (resigned vs appointed). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.90
+  L: [doc_571d2e492b944de8] Mr. Arjun Mehta | Independent Director = Independent Director (February 12, 2021) scope={"role_status": "appointed"}
+  R: [doc_0ec6c32422194000] Ms. Priya Ahluwalia | Independent Director = Independent Director (as of March 31, 2023) scope={"role_status": "active"}
+  Exp: Same metric and period but different reporting scope (active vs appointed). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 4,463.60 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,901.15 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Total income = 4,463.60 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total income = 1,148.90 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,268.91 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 96.2 (Q2 FY23) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2022-07:2022-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,268.91 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  R: [doc_b409c8b7ae174676] SOLSTICE ROBOTICS LIMITED | Revenue from operations (Rs. Cr) = 134.8 (Q2 FY24) scope={"consolidation": "consolidated"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2023-07:2023-09). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,268.91 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,109.40 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,058.10 (Year ended Mar 31, 2022 (Restated)) scope={"consolidation": "consolidated", "qualifier": "restated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 3,014.55 (Year ended Mar 31, 2022) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,401.20 (Year ended Mar 31, 2023 (Pro forma)) scope={"consolidation": "consolidated", "qualifier": "pro_forma"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.95
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 1,842.60 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Revenue from operations = 4,268.91 (Year ended Mar 31, 2023) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_scope) conf=0.85
+  L: [doc_0ec6c32422194000] Ms. Kavita Rao | Board Position: Managing Director = Managing Director (as of March 31, 2023) scope={"role_status": "appointed"}
+  R: [doc_571d2e492b944de8] Ms. Kavita Rao | Managing Director = Managing Director (None) scope={"role_status": "active"}
+  Exp: Same metric and period but different reporting scope (appointed vs active). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.90
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | Year ended = March 31, 2023 (FY2023) scope={}
+  R: [doc_b409c8b7ae174676] Investor Update | Quarter ended = September 30, 2023 (September 30, 2023) scope={}
+  Exp: Same metric and entity but different reporting periods (2022-04:2023-03 vs 2023-01:2023-12). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.90
+  L: [doc_0ec6c32422194000] Figures | year ended = March 31, 2022 (year ended March 31, 2022) scope={}
+  R: [doc_b409c8b7ae174676] Investor Update | Quarter ended = September 30, 2023 (September 30, 2023) scope={}
+  Exp: Same metric and entity but different reporting periods (2022-01:2022-12 vs 2023-01:2023-12). No conflict; reconciled by period.
+
+[RECONCILES] (different_period) conf=0.93
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | full-time employees = 1,842 (March 31, 2023) scope={"consolidation": "standalone"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 441 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2020-01:2020-12). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.93
+  L: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | full-time employees = 2,105 (March 31, 2023) scope={"consolidation": "consolidated"}
+  R: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 441 (Nine months ended Sep 30, 2020) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.
+
+[RECONCILES] (different_period) conf=0.93
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 612 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | full-time employees = 1,842 (March 31, 2023) scope={"consolidation": "standalone"}
+  Exp: Same metric and entity but different reporting periods (2023-01:2023-12 vs 2021-01:2021-12). No conflict; reconciled by period.
+
+[RECONCILES] (different_scope) conf=0.93
+  L: [doc_571d2e492b944de8] SOLSTICE ROBOTICS LIMITED | Total employees (standalone, as of period end) = 612 (Nine months ended Sep 30, 2021) scope={"consolidation": "standalone", "unrecognized_qualifier": "nine"}
+  R: [doc_0ec6c32422194000] SOLSTICE ROBOTICS LIMITED | full-time employees = 2,105 (March 31, 2023) scope={"consolidation": "consolidated"}
+  Exp: Same metric and period but different reporting scope (consolidated vs standalone). Values differ by design; reconciled by scope distinction.

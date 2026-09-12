@@ -212,3 +212,49 @@ class TestPlausibleYearGrounding:
         )
         res = ground(cand, block)
         assert res.accepted is True
+
+    def test_suspected_text_corruption_rejection(self):
+        """Table cells flagged with suspect_interleaving must be rejected with suspected_text_corruption."""
+        ctx = TableContext(
+            row_header="with effect from March 1, 20",
+            cell_value="25.",
+            column_headers=["OCERY"],
+            parse_quality="suspect_interleaving",
+        )
+        block = SourceBlock(
+            id="blk_corrupt_1",
+            document_id="doc_1",
+            pdf_page_index=1,
+            block_kind=BlockKind.TABLE_CELL,
+            text="25.",
+            text_normalised="25",
+            table_context=ctx,
+            content_hash="h_corrupt_1",
+        )
+        cand = FactCandidate(
+            entity_raw="Meridian Grocery Co-operative Society",
+            metric_raw="with effect from March 1, 20",
+            value_raw="25.",
+            evidence_quote="25.",
+            confidence_hint=0.85,
+        )
+        res = ground(cand, block)
+        assert res.accepted is False
+        assert res.rejection_reason == "suspected_text_corruption"
+
+    def test_check_suspect_interleaving_heuristics(self):
+        """Check that suspect interleaving heuristics distinguish corrupted fragments from valid headers."""
+        from fkl.pipeline.parse_pdf import check_suspect_interleaving
+
+        # Meridian broken fragments
+        assert check_suspect_interleaving("with effect from March 1, 20", ["OCERY"]) is True
+        assert check_suspect_interleaving("average annual purchase va", ["OCERY", "CO-OP", "ERATIVE", "SOCIET", "Y"]) is True
+        assert check_suspect_interleaving(None, ["OCERY", "CO-OP", "ERATIVE", "SOCIET", "Y"]) is True
+        assert check_suspect_interleaving("The Managing Committee n", ["SOCIET"]) is True
+
+        # Valid headers
+        assert check_suspect_interleaving("Revenue from operations", ["FY23", "FY22"]) is False
+        assert check_suspect_interleaving("Active deployed robot units", ["YoY", "Q2 FY24", "Q2 FY23"]) is False
+        assert check_suspect_interleaving("Total employees (standalone, as of period end)", ["Nine months ended Sep 30, 2021"]) is False
+        assert check_suspect_interleaving("Gross Margin (%)", ["Q1", "Q2", "FY24"]) is False
+

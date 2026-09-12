@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # LLM
     llm_provider: str = Field(default="fake", description="gemini | fake")
-    llm_model: str = Field(default="gemini-3.5-flash-lite")
+    llm_model: str = Field(default="gemini-3.1-flash-lite")
     gemini_api_key: str = Field(default="")
 
     # Database
@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # App
     pipeline_version: str = Field(default="1.0.0")
     log_level: str = Field(default="INFO")
+    max_metric_llm_calls_per_run: int = Field(default=450)
 
     @model_validator(mode="after")
     def check_llm_credentials(self) -> "Settings":

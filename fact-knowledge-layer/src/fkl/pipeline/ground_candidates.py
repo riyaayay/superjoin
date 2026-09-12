@@ -119,6 +119,12 @@ def _metric_in_text(metric_raw: str, search_text: str) -> bool:
     return True
 
 
+_DISCLAIMER_RE = re.compile(
+    r"\b(fictional|synthetic|for (?:evaluation|testing|demo|demonstration) purposes|not an actual company|hypothetical scenario)\b",
+    re.I,
+)
+
+
 def ground(
     candidate: FactCandidate,
     block: SourceBlock,
@@ -132,6 +138,18 @@ def ground(
     4. Table-cell candidates validate value against cell_value, not substring.
     5. Prose block metric labels must be grounded in the block text or evidence quote.
     """
+    # Priority 1: Reject meta-disclaimers / synthetic boilerplate
+    combined_cand_text = f"{candidate.metric_raw or ''} {candidate.value_raw or ''} {candidate.evidence_quote or ''}"
+    if _DISCLAIMER_RE.search(combined_cand_text) or (
+        block.block_kind != BlockKind.TABLE_CELL
+        and len(block.text.strip()) < 300
+        and _DISCLAIMER_RE.search(block.text)
+    ):
+        return GroundingResult(
+            accepted=False,
+            rejection_reason="meta_disclaimer_not_a_fact",
+        )
+
     # Chart/image blocks cannot produce grounded numeric facts
     if block.block_kind in (BlockKind.CHART, BlockKind.IMAGE):
         return GroundingResult(
@@ -145,6 +163,11 @@ def ground(
             return GroundingResult(
                 accepted=False,
                 rejection_reason="table_missing_row_header",
+            )
+        if block.table_context and block.table_context.parse_quality == "suspect_interleaving":
+            return GroundingResult(
+                accepted=False,
+                rejection_reason="suspected_text_corruption",
             )
 
     # Required fields

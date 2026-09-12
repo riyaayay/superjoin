@@ -42,6 +42,63 @@ def _balance_parens(s: str) -> str:
     return s + (")" * diff) if diff > 0 else s
 
 
+def check_suspect_interleaving(row_header: str | None, col_headers: list[str]) -> bool:
+    """
+    Detect character-interleaved or garbled table headers resulting from PDF column-slicing
+    of non-table prose or corrupted OCR/PDF streams (Bug 2).
+    """
+    headers_to_check: list[str] = []
+    if row_header:
+        headers_to_check.append(row_header)
+    if col_headers:
+        headers_to_check.extend(col_headers)
+
+    if not headers_to_check:
+        return False
+
+    for h in headers_to_check:
+        h_clean = h.strip()
+        # 1. Runs of uppercase letters isolated inside lowercase words (e.g. 'grOCERY')
+        if re.search(r"[a-z]+[A-Z]+[a-z]+", h_clean):
+            return True
+        # 2. Lowercase letter immediately followed by multiple uppercase letters
+        if re.search(r"[a-z][A-Z]{2,}", h_clean):
+            return True
+
+    # Check column header set for unnatural word fragments
+    if col_headers:
+        legit_short = {"q1", "q2", "q3", "q4", "h1", "h2", "yoy", "qoq", "fy", "cy", "rs", "inr", "usd", "eur", "%", "no", "cr"}
+        for ch in col_headers:
+            tokens = re.findall(r"\b[A-Za-z]+\b", ch)
+            for tok in tokens:
+                tok_lower = tok.lower()
+                # Broken uppercase word fragments from sliced headers (e.g. OCERY, ERATIVE, SOCIET)
+                if tok.isupper() and len(tok) >= 4:
+                    if tok_lower in ("ocery", "erative", "societ", "articul", "particu", "compan", "limit"):
+                        return True
+                # Single isolated uppercase letter that is not A or I, nor legitimate abbreviation (e.g. 'Y')
+                if tok.isupper() and len(tok) == 1 and tok not in ("A", "I") and tok_lower not in legit_short:
+                    return True
+
+    # Check row header for chopped prose sentence fragments
+    if row_header:
+        rh = row_header.strip()
+        # Sentence fragments ending mid-word with 1-2 lowercase letters after space
+        if re.search(r"\b[a-z]{3,}\s+[a-z]{1,2}$", rh, re.IGNORECASE):
+            last_word = rh.split()[-1].lower()
+            if last_word not in ("in", "to", "on", "of", "no", "cr", "mn", "bn", "fy", "q1", "q2", "q3", "q4"):
+                return True
+        # Sentence fragment ending with truncated year/number: "with effect from March 1, 20"
+        if re.search(r"\b(from|in|ended|as of|at)\s+[A-Z][a-z]+\s+\d{1,2},\s*20$", rh, re.IGNORECASE):
+            return True
+        # Typical prose narrative phrases that never appear as valid table row metrics
+        if re.search(r"\b(Managing Committee|notes with regret|elected to fill|annual general meeting|summarizes the Society)\b", rh, re.IGNORECASE):
+            return True
+
+    return False
+
+
+
 def _block_overlaps_table(
     bbox_raw: tuple[float, float, float, float] | list[float] | None,
     table_bboxes: list[tuple[float, float, float, float]],
@@ -93,7 +150,7 @@ def resolve_canonical_entity(mupdf_doc: fitz.Document) -> str | None:
             return author
 
     ignore_re = re.compile(
-        r"^(contents|table of contents|preface|acknowledgement|abbreviations|chapter|part\s+\w+|volume|index|page(\s+no\.?)?|\d+|[ivxlcdm]+$)",
+        r"^(contents|table of contents|preface|acknowledgement|abbreviations|chapter|part\s+\w+|volume|index|page(\s+no\.?)?|\d+|[ivxlcdm]+[\.\)]?$)",
         re.I,
     )
     toc_dots_re = re.compile(r"\.{4,}")
@@ -180,7 +237,7 @@ def parse_pdf(document_id: str, pdf_path: Path) -> tuple[list[SourceBlock], int,
         table_bboxes: list[tuple[float, float, float, float]] = []
 
         mupdf_tables = _extract_mupdf_tables(
-            document_id, pdf_page_index, printed_label, mupdf_page, page_dict_blocks
+            document_id, pdf_page_index, printed_label, mupdf_page, page_dict_blocks, canonical_entity=canonical_entity
         )
         if mupdf_tables:
             table_blocks = mupdf_tables
@@ -296,12 +353,33 @@ def _classify_block_kind(text: str, bbox: BoundingBox | None, page_height: float
     return BlockKind.PARAGRAPH
 
 
+def _bbox_iou(b1: tuple[float, float, float, float] | list[float], b2: tuple[float, float, float, float] | list[float]) -> float:
+    x_left = max(b1[0], b2[0])
+    y_top = max(b1[1], b2[1])
+    x_right = min(b1[2], b2[2])
+    y_bottom = min(b1[3], b2[3])
+    if x_right <= x_left or y_bottom <= y_top:
+        return 0.0
+    intersection = (x_right - x_left) * (y_bottom - y_top)
+    area1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+    area2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+    union = area1 + area2 - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+_CORP_TITLE_RE = re.compile(
+    r"\b(Limited|Ltd\.?|Corporation|Corp\.?|Inc\.?|LLC|Pvt\.?|PLC|Bank|Ministry|Department|Authority|Commission)\b",
+    re.I,
+)
+
+
 def _extract_mupdf_tables(
     document_id: str,
     pdf_page_index: int,
     printed_label: str | None,
     mupdf_page,
     page_dict_blocks: list[dict],
+    canonical_entity: str | None = None,
 ) -> list[SourceBlock]:
     """Extract labelled table cells using PyMuPDF native find_tables()."""
     result: list[SourceBlock] = []
@@ -314,7 +392,14 @@ def _extract_mupdf_tables(
     if not tabs or not getattr(tabs, "tables", None):
         return []
 
+    # Deduplicate tables with high bounding box overlap (IoU > 0.7) to prevent double-extraction
+    deduped_tables = []
     for t in tabs.tables:
+        tb = (t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3])
+        if not any(_bbox_iou(tb, (prev.bbox[0], prev.bbox[1], prev.bbox[2], prev.bbox[3])) > 0.7 for prev in deduped_tables):
+            deduped_tables.append(t)
+
+    for t in deduped_tables:
         try:
             rows = t.extract()
         except Exception:
@@ -334,9 +419,9 @@ def _extract_mupdf_tables(
             txt = b.get("text", "").strip()
             if not txt:
                 continue
-            if company_title is None and len(txt) < 80 and (txt.isupper() or "Limited" in txt or "Ltd" in txt or "Corporation" in txt):
+            if company_title is None and len(txt) < 80 and _CORP_TITLE_RE.search(txt):
                 company_title = txt
-            if re.search(r"(statement|profit|loss|balance|income|particulars|review|table|financial)", txt, re.I):
+            if re.search(r"(statement|profit|loss|balance|income|particulars|review|table|financial|standalone|consolidated)", txt, re.I):
                 table_title = txt.split("\n")[0].strip()
             if re.search(r"(all figures|figures in|in rs|in inr|in usd|million|crore|lakh|%)", txt, re.I):
                 m = re.search(r"(all figures are in [^.]+?\b(?:million|crore|lakh|billion|inr|rs\.?|usd)\b|in rs\.?\s*(?:million|crore|lakh)|in ₹\s*(?:million|crore|lakh)|in (?:million|crore|lakh))", txt, re.I)
@@ -344,6 +429,9 @@ def _extract_mupdf_tables(
                     unit_note = m.group(1).strip()
                 else:
                     unit_note = txt.split(".")[0].strip()
+
+        if company_title is None:
+            company_title = canonical_entity
 
         # Keep table title and company title genuinely separate (Fix 1)
         col_headers = None
@@ -360,6 +448,7 @@ def _extract_mupdf_tables(
 
         # Ensure parenthetical qualifiers in column headers are balanced (Fix 6)
         col_headers = [_balance_parens(h) for h in col_headers]
+        table_overall_suspect = check_suspect_interleaving(None, col_headers)
 
         # Extract data rows
         for row in rows[1:]:
@@ -379,16 +468,21 @@ def _extract_mupdf_tables(
                 col_header = col_headers[col_idx] if col_idx < len(col_headers) else ""
                 
                 # Skip footnote/note reference columns
-                if col_header.lower() in ("note", "notes", "ref", "schedule", "sl no", "s.no", "sr no"):
-                    continue
+                cols_list = [col_header] if col_header else []
+                parse_quality = (
+                    "suspect_interleaving"
+                    if table_overall_suspect or check_suspect_interleaving(row_header, cols_list) or check_suspect_interleaving(row_header, col_headers)
+                    else None
+                )
 
                 table_ctx = TableContext(
                     table_title=table_title,
                     company_name=company_title,
                     row_header=row_header,
-                    column_headers=[col_header] if col_header else [],
+                    column_headers=cols_list,
                     cell_value=cell_text,
                     unit_note=unit_note,
+                    parse_quality=parse_quality,
                 )
 
                 full_text = json.dumps(table_ctx.model_dump(), ensure_ascii=False)
@@ -445,6 +539,7 @@ def _extract_table_blocks(
 
         # Detect table title from nearby text (heuristic: not available here, use None)
         table_title = None
+        table_overall_suspect = check_suspect_interleaving(None, [str(c).strip() for c in header_row if c])
 
         for row in data_rows:
             if not row or all(not cell for cell in row):
@@ -461,13 +556,20 @@ def _extract_table_blocks(
                     continue
 
                 col_header = str(header_row[col_idx]).strip() if col_idx < len(header_row) else None
+                cols_list = [col_header] if col_header else []
+                parse_quality = (
+                    "suspect_interleaving"
+                    if table_overall_suspect or check_suspect_interleaving(row_header, cols_list)
+                    else None
+                )
 
                 table_ctx = TableContext(
                     table_title=table_title,
                     row_header=row_header,
-                    column_headers=[col_header] if col_header else [],
+                    column_headers=cols_list,
                     cell_value=cell_text,
                     unit_note=unit_note,
+                    parse_quality=parse_quality,
                 )
 
                 full_text = json.dumps(table_ctx.model_dump(), ensure_ascii=False)

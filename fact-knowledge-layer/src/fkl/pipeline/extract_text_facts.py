@@ -201,6 +201,13 @@ def extract_text_facts(
                 if canonical_entity:
                     cand.entity_raw = canonical_entity
 
+            # Preserve standalone/consolidated scope from metric or evidence quote (Priority 2)
+            cand_text = f"{cand.metric_raw} {cand.evidence_quote or ''}".lower()
+            if "standalone" in cand_text:
+                cand.scope.setdefault("consolidation", "standalone")
+            elif "consolidated" in cand_text:
+                cand.scope.setdefault("consolidation", "consolidated")
+
             results.append((cand, block))
             per_page_counts[page] = per_page_counts.get(page, 0) + 1
             total_candidates += 1
