@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fact-knowledge-layer
+    runtime: python
+    buildCommand: pip install -r requirements.txt && pip install -e fact-knowledge-layer
+    startCommand: uvicorn fkl.main:app --app-dir fact-knowledge-layer/src --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_API_KEY
+        sync: false
