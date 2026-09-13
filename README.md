@@ -87,7 +87,7 @@ rm fkl.db   # or the path set in DATABASE_URL
 
 ## Video Demo
 
-[LINK][https://drive.google.com/file/d/1qFKr4kdSrsyX9x8HUnsDFhzbHk6K-58c/view?usp=sharing] — recorded against the locked-down 4-document Solstice/Meridian
+[LINK](https://drive.google.com/file/d/1qFKr4kdSrsyX9x8HUnsDFhzbHk6K-58c/view?usp=sharing) — recorded against the locked-down 4-document Solstice/Meridian
 synthetic set, with the 3 official Delhivery starter documents pre-loaded
 at the start to demonstrate the system running on the actual provided
 dataset. Shows all four required cases with source evidence and reasoning
